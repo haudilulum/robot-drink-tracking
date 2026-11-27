@@ -113,9 +113,9 @@ class DetektorKamera:
 
 # ------------------------------------------------------------------ backend yolo
 class YoloDetector(DetektorKamera):
-    """YOLOv8 ONNX lewat cv2.dnn. Butuh model hasil latih sendiri (2 kelas).
+    """YOLO (v8/v11) ONNX lewat cv2.dnn. Butuh model hasil latih sendiri (2 kelas).
 
-    Keluaran YOLOv8 adalah tensor (1, 4+nc, 8400): 4 baris pertama cx,cy,w,h
+    Keluaran mentahnya tensor (1, 4+nc, N): 4 baris pertama cx,cy,w,h
     dalam piksel input, sisanya skor per kelas. Tidak perlu torch/ultralytics.
     """
 

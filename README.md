@@ -228,11 +228,30 @@ satu contoh yang diduplikasi.
 2. Beri label `kopi` dan `teh`, satu kotak per gelas. Gelas yang bukan target
    **jangan dilabeli** (otomatis jadi latar).
 3. Split otomatis ±70/20/10, augmentasi cahaya + blur secukupnya.
-4. Train **YOLOv8n** (Roboflow hosted atau Colab).
+4. Train **YOLO11 nano** (Roboflow hosted atau Colab).
 5. Lihat mAP50 dan confusion matrix. Kalau kelas tertukar, tambah foto yang mirip
    dengan kasus yang salah, jangan menambah epoch.
 
-### 4c. Ekspor ke ONNX
+### 4c. Pilih arsitektur yang bisa jalan di `cv2.dnn`
+
+Roboflow menawarkan beberapa arsitektur; tidak semuanya bisa dipakai robot ini.
+Yang menentukan adalah bentuk keluaran ONNX-nya, karena `vision.py` membaca tensor
+mentah `(1, 4+nc, N)` lalu melakukan NMS sendiri.
+
+| Pilihan di Roboflow | Untuk robot ini | Sebabnya |
+|---|---|---|
+| **YOLO11** (nano / small) | **pakai ini** | keluaran sama seperti YOLOv8 yang sudah terbukti di Pi 3B+ |
+| YOLOv12 | hindari | blok attention lebih berat; belum tentu semua ops-nya didukung `cv2.dnn` di Pi |
+| YOLO26 | tidak cocok | sudah *NMS-free* (end-to-end), keluarannya `(1, 300, 6)` — parser kita butuh tensor mentah |
+| YOLO-NAS | tidak dipakai | lebih berat, butuh `super-gradients` untuk ekspor |
+| RF-DETR | tidak cocok | transformer; butuh decoder sendiri dan terlalu berat untuk CPU Pi 3B+ |
+| Roboflow 3.0 | tidak dipakai | dijalankan lewat Roboflow Inference (butuh internet, tidak tersedia untuk Pi 3B+ 32-bit) |
+| YOLOLite | tidak dipakai | ditujukan untuk runtime Roboflow, bukan ONNX `cv2.dnn` |
+
+Ukuran: **nano** kalau tersedia, kalau hanya ada Small tetap boleh — selisih
+waktunya kecil di 320, tapi nano lebih ringan di RAM 1 GB.
+
+### 4d. Ekspor ke ONNX
 
 Di Roboflow: **Deploy → ONNX**, ukuran input **320×320**, tanpa NMS
 (*non-end-to-end*). Unduh, lalu di Pi:
@@ -240,7 +259,7 @@ Di Roboflow: **Deploy → ONNX**, ukuran input **320×320**, tanpa NMS
 ```bash
 mkdir -p models
 # salin hasil unduhan ke sini
-cp ~/unduhan/model.onnx models/kopi_teh_yolov8n.onnx
+cp ~/unduhan/model.onnx models/kopi_teh.onnx
 ```
 
 Dua hal yang harus cocok, kalau tidak deteksi akan kosong atau kelas tertukar:
@@ -361,8 +380,8 @@ rentang untuk `kopi` gampang tumpang tindih dengan `teh`. Model belajar bentuk,
 tekstur, dan konteks sekaligus. Ongkosnya dataset berlabel dan satu kali training —
 itu sudah dikerjakan di tahap 4.
 
-Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (terukur
-1171 ms), sementara 320 diperkirakan ±1 s. Karena itu:
+Di Pi 3B+, YOLO nano ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (terukur
+1171 ms pada YOLOv8n, YOLO11n sekelas), sementara 320 diperkirakan ±1 s. Karena itu:
 
 - model berjalan di thread terpisah (`AsyncDetector`) — loop kendali tetap ±16 Hz,
   hasil lebih tua dari `ASYNC_BASI_S` dibuang;
@@ -384,7 +403,7 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
 
 ### D. Kalau bermasalah
 
-- **`model YOLO belum ada`** — ONNX belum ditaruh di `models/kopi_teh_yolov8n.onnx`.
+- **`model YOLO belum ada`** — ONNX belum ditaruh di `models/kopi_teh.onnx`.
 - **Kelas tertukar (kopi dianggap teh)** — `YOLO_KELAS` tidak sama urutan dengan
   `data.yaml` Roboflow.
 - **Tidak ada deteksi sama sekali** — `YOLO_IMGSZ` tidak sama dengan ukuran input

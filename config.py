@@ -86,7 +86,10 @@ VISION_BACKEND = "yolo"
 PROC_W, PROC_H = 320, 240        # frame kecil untuk optical flow & hemat memori
                                  # (kamera tetap 640x480; hanya flow memakai 320x240)
 
-YOLO_MODEL_PATH = "models/kopi_teh_yolov8n.onnx"
+# Nama berkas bebas selama sama dengan isi models/. Yang wajib cocok adalah
+# YOLO_IMGSZ dengan ukuran input saat ekspor dan YOLO_KELAS dengan urutan kelas.
+# Arsitektur yang aman: YOLO11 nano/small (keluaran sama seperti YOLOv8).
+YOLO_MODEL_PATH = "models/kopi_teh.onnx"
 YOLO_KELAS = ["kopi", "teh"]     # urutan HARUS sama dengan saat training
 YOLO_IMGSZ = 320                 # 320 cukup; 640 terlalu berat untuk Pi 3B+
 YOLO_NMS = 0.45
