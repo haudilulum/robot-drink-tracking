@@ -1,0 +1,4 @@
+# hanya untuk mesin dev; di Raspberry Pi pakai apt (python3-opencv,
+# python3-numpy, python3-gpiozero, python3-lgpio) supaya wheel tidak dikompilasi
+opencv-python-headless>=4.5
+numpy>=1.19

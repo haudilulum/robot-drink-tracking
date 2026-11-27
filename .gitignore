@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+foto/
+*.avi
+*.mp4
+models/*.onnx
+*.log
+.DS_Store
