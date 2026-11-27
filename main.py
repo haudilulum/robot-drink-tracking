@@ -40,6 +40,8 @@ class Robot:
         self.arah = 1               # +1 kiri, -1 kanan
         self.langkah = 0
         self.deteksi_terakhir = []
+        self.perintah_ingat = (0.0, 0.0)   # duty terakhir saat maju ke target
+        self.generasi_stabil = -1          # generasi hasil deteksi yang dihitung
 
     # ---------------------------------------------------------------- utilitas
     def log(self, *a):
@@ -62,6 +64,8 @@ class Robot:
         self.langkah = 0
         self.fase = "periksa"
         self.t_fase = self.jam()
+        self.perintah_ingat = (0.0, 0.0)
+        self.generasi_stabil = -1
         self.hw.led_set(True)
         self.log(f"tombol {target} -> mulai mencari")
 
@@ -136,7 +140,13 @@ class Robot:
         self.hw.stop()
         d = vision.pilih_target(self.det.detect(frame), self.target)
         if d is not None:
-            self.stabil += 1
+            # Dengan detektor async, detect() mengembalikan hasil cache yang sama
+            # berkali-kali; tanpa cek generasi, satu deteksi bisa langsung
+            # dianggap "3 frame stabil".
+            generasi = getattr(self.det, "generasi", None)
+            if generasi is None or generasi != self.generasi_stabil:
+                self.stabil += 1
+                self.generasi_stabil = generasi
             self.t_lihat = t
             self.t_fase = t
             if self.stabil >= C.FRAME_STABIL:
@@ -168,7 +178,10 @@ class Robot:
         d = vision.pilih_target(self.det.detect(frame), self.target)
 
         if d is None:
-            self.hw.stop()
+            # Gelas tidak bergerak: deteksi yang putus sesaat (osilasi kamera,
+            # bayangan, satu frame buram) bukan alasan berhenti. Lanjutkan
+            # perintah terakhir supaya robot tidak berhenti-maju berulang.
+            self.hw.drive(*self.perintah_ingat)
             if t - self.t_lihat > C.GRACE_HILANG_S:
                 self.log("target hilang -> cari ulang")
                 self.ke("CARI")
@@ -197,7 +210,9 @@ class Robot:
         error = d.cx - 0.5                    # >0 berarti target di kanan
         belok = C.clamp(C.KP_BELOK * error, -C.KOREKSI_MAKS, C.KOREKSI_MAKS)
         # target di kanan -> roda kiri lebih cepat -> badan berbelok ke kanan
-        self.hw.drive(self._duty(dasar + belok), self._duty(dasar - belok))
+        kiri, kanan = self._duty(dasar + belok), self._duty(dasar - belok)
+        self.perintah_ingat = (kiri, kanan)   # target statis: dipakai saat deteksi putus
+        self.hw.drive(kiri, kanan)
 
 
 # ---------------------------------------------------------------------- CLI

@@ -333,6 +333,7 @@ class AsyncDetector:
         self._diproses = 0
         self._hasil = []
         self._waktu = 0.0
+        self.generasi = 0
         self._kunci = threading.Lock()
         self._bangun = threading.Event()
         self._stop = threading.Event()
@@ -377,6 +378,7 @@ class AsyncDetector:
                 self._diproses = nomor
                 self._hasil = hasil
                 self._waktu = time.monotonic()
+                self.generasi += 1          # penanda: ada hasil deteksi baru
             sisa = self.jeda_s - (time.monotonic() - mulai)
             if sisa > 0:
                 self._stop.wait(sisa)
@@ -404,6 +406,10 @@ class AlurDetector:
         self._titik = None
         self._kotak = None
         self._masuk = None
+
+    @property
+    def generasi(self):
+        return getattr(self.dalam, "generasi", None)
 
     def read(self):
         return self.dalam.read()

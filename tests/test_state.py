@@ -230,3 +230,62 @@ class TesFakeDetector(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TesTargetStatis(unittest.TestCase):
+    """Gelas tidak bergerak: deteksi putus sesaat bukan alasan berhenti."""
+
+    def test_hilang_sesaat_tetap_maju(self):
+        det = DetUji([kotak(w=0.30)])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        jalankan(r, jam, 1 + C.FRAME_STABIL + 2)      # masuk DEKATI lalu menggas
+        self.assertEqual(r.state, "DEKATI")
+        self.assertNotEqual(hw.drive_terakhir, (0.0, 0.0))
+        sebelum = hw.drive_terakhir
+
+        det.daftar = []                                # satu-dua frame buram
+        r.step(None)
+        self.assertEqual(r.state, "DEKATI", "jangan langsung cari ulang")
+        self.assertEqual(hw.drive_terakhir, sebelum,
+                         "perintah terakhir harus dilanjutkan, bukan stop")
+
+    def test_setelah_grace_baru_cari_ulang(self):
+        det = DetUji([kotak(w=0.30)])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        jalankan(r, jam, 1 + C.FRAME_STABIL + 2)
+        det.daftar = []
+        langkah = int(C.GRACE_HILANG_S / 0.05) + 3
+        jalankan(r, jam, langkah)
+        self.assertEqual(r.state, "CARI")
+
+
+class DetUjiBasi(DetUji):
+    """Meniru detektor async: hasil sama terus, generasi tidak naik."""
+
+    generasi = 7
+
+    def detect(self, _frame):
+        return list(self.daftar)
+
+
+class TesGenerasiStabil(unittest.TestCase):
+    def test_hasil_basi_tidak_dihitung_sebagai_frame_baru(self):
+        det = DetUjiBasi([kotak()])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        jalankan(r, jam, 20)
+        self.assertEqual(r.state, "CARI",
+                         "satu deteksi basi tidak boleh langsung mengunci target")
+
+    def test_generasi_baru_mengunci_target(self):
+        det = DetUjiBasi([kotak()])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        r.step(None)                       # langkah ini hanya membaca tombol
+        for i in range(C.FRAME_STABIL):
+            det.generasi = 10 + i
+            r.step(None)
+            jam.maju(0.05)
+        self.assertEqual(r.state, "DEKATI")

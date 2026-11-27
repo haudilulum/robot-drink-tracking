@@ -120,9 +120,15 @@ Backend `yolo` tidak memakai `ultralytics`/torch — model ONNX dijalankan lewat
 `cv2.dnn`, supaya RAM 1 GB tidak habis. Taruh model di `models/kopi_teh_yolov8n.onnx`
 lalu jalankan `python3 main.py --vision yolo`.
 
-## Kalibrasi sebelum dipakai di lantai
+## Yang perlu dikalibrasi — pilih satu jalur, jangan ditumpuk
 
-Angka di `config.py` adalah nilai awal, bukan hasil ukur. Empat langkah ini wajib:
+Dua backend identifikasi itu **saling menggantikan**, bukan berlapis. Kalau Anda
+memakai `yolo` (Roboflow), kalibrasi HSV tidak berlaku sama sekali: `WARNA` tidak
+dibaca oleh `YoloDetector`, dan `kalibrasi.py` tidak perlu dijalankan.
+
+### Jalur A — `penanda` / `bentuk`: kalibrasi HSV, tanpa dataset
+
+Angka di `config.py` adalah nilai awal, bukan hasil ukur.
 
 1. **Warna penanda** — `python3 tangkap.py --jumlah 3`, lalu
    `python3 kalibrasi.py foto/frame_1.jpg --auto --label kopi`. Tempel hasilnya ke
@@ -138,8 +144,23 @@ Angka di `config.py` adalah nilai awal, bukan hasil ukur. Empat langkah ini waji
    bandingkan dengan posisi setelah satu langkah. Sesuaikan `DERAJAT_PER_DETIK`
    supaya 12 langkah ≈ 360°.
 
-Yang biasanya masih perlu disetel setelah itu: `KP_BELOK` (terlalu besar =
-osilasi kiri-kanan) dan `SPEED_MAJU`.
+### Jalur B — `yolo` (Roboflow): tidak ada HSV sama sekali
+
+Yang perlu disetel hanya ini, semuanya soal model dan gerak:
+
+1. **`YOLO_KELAS`** — urutan harus sama persis dengan saat training (`["kopi", "teh"]`).
+2. **`CONF_MIN`** — 0,35 awal; naikkan kalau potongan latar ikut terdeteksi,
+   turunkan kalau gelas jauh tidak terbaca.
+3. **`W_BERHENTI` / `W_MULAI_PELAN`** — tetap dari log `w=` saat `--debug`, sama
+   seperti jalur A.
+4. **`DERAJAT_PER_DETIK`** — turunkan ke ~45: satu deteksi butuh 1,75 s (416),
+   jadi menyapu terlalu cepat membuat gelas terlewat di antara dua deteksi.
+
+### Berlaku untuk kedua jalur
+
+**Deadband motor** dan **sudut putar** di atas tetap wajib, begitu juga
+`KP_BELOK` (terlalu besar = osilasi kiri-kanan) dan `SPEED_MAJU`. Ini soal
+mekanik, bukan soal visi.
 
 ## Uji tanpa hardware
 
