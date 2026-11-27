@@ -16,10 +16,14 @@ import config as C
 
 def semua_pin():
     return {
-        "motor kiri maju": C.PIN_MOTOR_KIRI_MAJU,
-        "motor kiri mundur": C.PIN_MOTOR_KIRI_MUNDUR,
-        "motor kanan maju": C.PIN_MOTOR_KANAN_MAJU,
-        "motor kanan mundur": C.PIN_MOTOR_KANAN_MUNDUR,
+        "kiri depan maju": C.PIN_MOTOR_KIRI_DEPAN_MAJU,
+        "kiri depan mundur": C.PIN_MOTOR_KIRI_DEPAN_MUNDUR,
+        "kiri belakang maju": C.PIN_MOTOR_KIRI_BELAKANG_MAJU,
+        "kiri belakang mundur": C.PIN_MOTOR_KIRI_BELAKANG_MUNDUR,
+        "kanan depan maju": C.PIN_MOTOR_KANAN_DEPAN_MAJU,
+        "kanan depan mundur": C.PIN_MOTOR_KANAN_DEPAN_MUNDUR,
+        "kanan belakang maju": C.PIN_MOTOR_KANAN_BELAKANG_MAJU,
+        "kanan belakang mundur": C.PIN_MOTOR_KANAN_BELAKANG_MUNDUR,
         "pb kopi": C.PIN_PB_KOPI,
         "pb teh": C.PIN_PB_TEH,
         "led": C.PIN_LED,
@@ -47,6 +51,21 @@ class TesPin(unittest.TestCase):
         # 0/1 = ID_SD/ID_SC (EEPROM), 14/15 = UART serial konsol
         terpakai = set(semua_pin().values())
         self.assertFalse(terpakai & {0, 1, 14, 15}, "jangan pakai pin khusus ini")
+
+
+class TesPenggerak(unittest.TestCase):
+    def test_empat_roda_tiap_motor_kanal_sendiri(self):
+        # 4 motor butuh 8 pin: tidak ada yang diparalel
+        motor = [k for k in semua_pin() if k not in
+                 ("pb kopi", "pb teh", "led", "buzzer")]
+        self.assertEqual(len(motor), 8, motor)
+
+    def test_lapisan_hardware_mendrive_empat_motor(self):
+        import inspect
+        import hardware
+        kode = inspect.getsource(hardware.Hardware.drive)
+        for roda in ("kiri_depan", "kiri_belakang", "kanan_depan", "kanan_belakang"):
+            self.assertIn(roda, kode)
 
 
 class TesAmbang(unittest.TestCase):

@@ -1,4 +1,8 @@
-"""Lapisan hardware: 2 motor DC (MX1508), 2 tombol, LED, buzzer.
+"""Lapisan hardware: 4 motor DC 4WD (2 modul MX1508), 2 tombol, LED, buzzer.
+
+Empat roda digerakkan semua (skid-steer). Sisi kiri dan sisi kanan selalu diberi
+duty yang sama, jadi kontrol tetap dua angka: (kiri, kanan).
+
 
 Dua implementasi:
   Hardware     -> Raspberry Pi + gpiozero
@@ -19,10 +23,14 @@ class Hardware:
     def __init__(self):
         from gpiozero import Button, Motor, Buzzer, LED
 
-        self.kiri = Motor(forward=C.PIN_MOTOR_KIRI_MAJU,
-                          backward=C.PIN_MOTOR_KIRI_MUNDUR)
-        self.kanan = Motor(forward=C.PIN_MOTOR_KANAN_MAJU,
-                           backward=C.PIN_MOTOR_KANAN_MUNDUR)
+        self.kiri_depan = Motor(forward=C.PIN_MOTOR_KIRI_DEPAN_MAJU,
+                                backward=C.PIN_MOTOR_KIRI_DEPAN_MUNDUR)
+        self.kiri_belakang = Motor(forward=C.PIN_MOTOR_KIRI_BELAKANG_MAJU,
+                                   backward=C.PIN_MOTOR_KIRI_BELAKANG_MUNDUR)
+        self.kanan_depan = Motor(forward=C.PIN_MOTOR_KANAN_DEPAN_MAJU,
+                                 backward=C.PIN_MOTOR_KANAN_DEPAN_MUNDUR)
+        self.kanan_belakang = Motor(forward=C.PIN_MOTOR_KANAN_BELAKANG_MAJU,
+                                    backward=C.PIN_MOTOR_KANAN_BELAKANG_MUNDUR)
         self.led = LED(C.PIN_LED)
         self.buzzer = Buzzer(C.PIN_BUZZER)
 
@@ -40,12 +48,17 @@ class Hardware:
 
     # ------------------------------------------------------------------- motor
     def drive(self, kiri, kanan):
-        self.kiri.value = C.clamp(kiri, -1.0, 1.0)
-        self.kanan.value = C.clamp(kanan, -1.0, 1.0)
+        k = C.clamp(kiri, -1.0, 1.0)
+        n = C.clamp(kanan, -1.0, 1.0)
+        self.kiri_depan.value = k
+        self.kiri_belakang.value = k
+        self.kanan_depan.value = n
+        self.kanan_belakang.value = n
 
     def stop(self):
-        self.kiri.value = 0.0
-        self.kanan.value = 0.0
+        for roda in (self.kiri_depan, self.kiri_belakang,
+                     self.kanan_depan, self.kanan_belakang):
+            roda.value = 0.0
 
     # ------------------------------------------------------------------- suara
     def beep(self, n=1, dur=0.12):

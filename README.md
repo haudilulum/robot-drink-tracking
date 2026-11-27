@@ -9,7 +9,7 @@ mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya dan berbunyi
 - Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS 32-bit, webcam USB,
   2× driver MX1508, 2 motor DC gearbox.
 
-> Status: kode selesai dan teruji (54 tes, uji loop tertutup). Yang belum ada di
+> Status: kode selesai dan teruji (56 tes, uji loop tertutup). Yang belum ada di
 > repo hanya **model terlatih** — dibuat sendiri di tahap 4.
 
 ```
@@ -45,18 +45,19 @@ setelah robotnya bisa melihat (tahap 3).
 | Raspberry Pi 3B+ | 1 | 1 GB RAM; 4/5 boleh, tapi angka di repo ini diukur untuk 3B+ |
 | microSD 16 GB+ | 1 | Raspberry Pi OS **32-bit** (Bullseye/Bookworm) |
 | Webcam USB (UVC) | 1 | yang mendukung **MJPG** 640×480 @30 FPS |
-| Modul driver MX1508 | 2 | satu motor satu kanal; jangan diparalel (batas ±1,2–1,5 A/kanal) |
-| Motor DC gearbox + roda | 2 set | motor "TT" kuning sudah cukup |
-| Roda bebas (castor) | 1 | di depan atau belakang |
+| Modul driver MX1508 | 2 | 4 kanal terpakai, **satu motor satu kanal**; jangan diparalel (batas ±1,2–1,5 A/kanal) |
+| Motor DC gearbox + roda | 4 set | motor "TT" kuning sudah cukup; 4 roda digerakkan semua |
 | Baterai 2S (7,4 V) | 1 | 2× 18650 + holder, atau LiPo 2S; **maksimal 10 V** ke MX1508 |
-| Saklar + sekring | 1 | sekring 3 A sudah cukup |
+| Saklar + sekring | 1 | sekring 5 A (empat motor jalan bersamaan) |
 | Push button | 2 | tombol tekan biasa, tidak perlu modul |
 | LED + resistor 330 Ω | 1 | indikator status |
 | Buzzer aktif 3–5 V | 1 | yang berbunyi sendiri saat diberi tegangan |
 | Bodi | 1 | akrilik/3D print; kamera dipasang tetap, **tidak** pakai servo |
 
-Yang **tidak** dibutuhkan: servo pan, sensor jarak, layar, keyboard. Robot
-sepenuhnya dikendalikan dua tombol, dan jarak ditebak dari ukuran kotak deteksi.
+Yang **tidak** dibutuhkan: roda bebas/castor, servo pan, sensor jarak, layar,
+keyboard. Karena keempat roda digerakkan (skid-steer), bodi tidak butuh titik
+tumpu ketiga — castor hanya dipakai pada robot 2WD. Robot sepenuhnya dikendalikan
+dua tombol, dan jarak ditebak dari ukuran kotak deteksi.
 
 ## 2. Rakit dan kabel
 
@@ -64,45 +65,64 @@ sepenuhnya dikendalikan dua tombol, dan jarak ditebak dari ukuran kotak deteksi.
 
 | Fungsi | GPIO | Keterangan |
 |---|---|---|
-| MX1508 **kiri** IN1 / IN2 | 23 / 24 | modul 1, kanal A |
-| MX1508 **kanan** IN1 / IN2 | 5 / 6 | modul 2, kanal A |
+| modul 1 kanal A → **kiri depan** | 23 (IN1) / 24 (IN2) | OUT1/OUT2 ke motor kiri depan |
+| modul 1 kanal B → **kiri belakang** | 25 (IN3) / 16 (IN4) | OUT3/OUT4 ke motor kiri belakang |
+| modul 2 kanal A → **kanan depan** | 5 (IN1) / 6 (IN2) | OUT1/OUT2 ke motor kanan depan |
+| modul 2 kanal B → **kanan belakang** | 19 (IN3) / 26 (IN4) | OUT3/OUT4 ke motor kanan belakang |
 | PB1 (kopi) | 17 | tombol ke GND, pull-up internal, tanpa resistor |
 | PB2 (teh) | 27 | idem |
 | LED status | 22 | anoda ke GPIO22, katoda lewat 330 Ω ke GND |
 | Buzzer | 18 | aktif 3–5 V; kalau bervolume kecil, tambahkan transistor |
 | GPIO 12 | — | sengaja dibiarkan kosong (tidak ada servo pan) |
 
-### Kenapa 2 modul MX1508 tapi cuma 4 pin GPIO
+### Empat kanal, delapan pin
 
-MX1508 tidak punya pin **ENA/ENB** seperti L298N. Di modul ini PWM masuk langsung
-ke pin **IN**, dan arah ditentukan pin pasangannya:
+MX1508 tidak punya pin **ENA/ENB** seperti L298N. PWM masuk langsung ke pin **IN**,
+dan arah ditentukan pin pasangannya:
 
-| IN1 | IN2 | Keluaran OUT1–OUT2 |
+| IN maju | IN mundur | Keluaran |
 |---|---|---|
 | PWM | 0 | maju, kecepatan = duty |
 | 0 | PWM | mundur, kecepatan = duty |
 | 0 | 0 | motor diam (rem) |
 
-Jadi satu motor butuh **2 pin**, bukan 3. Dua motor = 4 pin. Yang membuatnya jadi
-dua modul adalah **arus**, bukan jumlah pin: satu kanal MX1508 hanya tahan
-±1,2–1,5 A kontinu, dan dua motor yang menanjak bersamaan bisa melewatinya.
+Jadi satu motor butuh **2 pin**, bukan 3. Empat motor = 8 pin = empat kanal, dua
+kanal per modul. Semua kanal dipakai; tidak ada motor yang diparalel.
 
 ```
-Modul 1 (motor kiri)              Modul 2 (motor kanan)
-  IN1 ── GPIO23 (PWM)               IN1 ── GPIO5 (PWM)
-  IN2 ── GPIO24                     IN2 ── GPIO6
-  OUT1/OUT2 ── motor kiri           OUT1/OUT2 ── motor kanan
-  IN3, IN4 ── GND (tidak dipakai)   IN3, IN4 ── GND (tidak dipakai)
-  VM  ── +7,4 V                     VM  ── +7,4 V
-  GND ── GND baterai/Pi             GND ── GND baterai/Pi
+Modul 1                            Modul 2
+ kanal A (kiri depan)               kanal A (kanan depan)
+   IN1 ── GPIO23 (PWM)                IN1 ── GPIO5 (PWM)
+   IN2 ── GPIO24                      IN2 ── GPIO6
+   OUT1/OUT2 ── motor LD              OUT1/OUT2 ── motor KnD
+ kanal B (kiri belakang)            kanal B (kanan belakang)
+   IN3 ── GPIO25 (PWM)                IN3 ── GPIO19 (PWM)
+   IN4 ── GPIO16                      IN4 ── GPIO26
+   OUT3/OUT4 ── motor LB              OUT3/OUT4 ── motor KnB
+ VM  ── +7,4 V                      VM  ── +7,4 V
+ GND ── GND baterai/Pi              GND ── GND baterai/Pi
 ```
 
-Kanal B (IN3/IN4, OUT3/OUT4) di kedua modul sengaja tidak dipakai. Pin IN3/IN4
-diikat ke GND supaya tidak mengambang dan mengambil derau — bukan untuk kontrol.
+Sisi kiri (GPIO 23/24/25/16) dan sisi kanan (5/6/19/26) selalu diberi duty yang
+sama oleh `hardware.drive(kiri, kanan)` — jadi kontrolnya tetap dua angka, tapi
+torsi dibagi empat roda dan tiap kanal hanya menanggung satu motor (±0,6 A saat
+maju biasa, jauh dari batas 1,2–1,5 A).
 
-Empat pin itu **hanya cukup** kalau tiap motor memakai kanal A modulnya sendiri.
-Jangan memparalel OUT1/OUT2 dua modul ke satu motor (dua saklar saling melawan),
-dan jangan menyalakan dua motor pada satu kanal kalau arus totalnya dekat batas.
+Yang **tidak** boleh: memparalel OUT1/OUT2 dua modul ke satu motor (dua jembatan H
+saling melawan), atau menaruh dua motor pada satu kanal (arus dobel, dan dua motor
+yang tidak identik akan saling menyeret).
+
+### Konsekuensi mekanik 4WD
+
+- **Tidak ada castor.** Keempat roda menopang bodi sekaligus menggerakkan, jadi
+  tidak ada roda yang cuma "ikut".
+- **Belok = mengerem sisi dalam.** Karena tidak ada kemudi, robot berbelok dengan
+  membuat roda kiri dan kanan berlawanan. Pada bodi kaku, empat roda akan sedikit
+  menyeret (skid) saat berbelok — di lantai keramik/licin tidak terasa, di karpet
+  tebal butuh duty belok lebih tinggi (`SPEED_PUTAR`).
+- **Diameter roda harus sama.** Satu roda lebih kecil membuat robot menarik ke
+  sisi itu terus-menerus; kalau terjadi, `KP_BELOK` akan terus mengoreksi dan
+  gerak jadi mengayun.
 
 ### Daya
 
@@ -126,12 +146,29 @@ Pasang roda, lalu jalankan uji roda sebelum memasang kamera:
 
 ```bash
 python3 main.py --dry-run --seconds 3      # hanya mencatat, tidak menggerakkan motor
-python3 -c "import hardware;hw=hardware.make();hw.drive(0.4,0.4);input('kedua roda maju? enter=');hw.stop()"
+
+# tiap roda sendiri-sendiri, 1,5 s
+python3 - <<'PY'
+import hardware, time
+hw = hardware.make()
+for nama in ("kiri_depan", "kiri_belakang", "kanan_depan", "kanan_belakang"):
+    print(nama, "-> maju")
+    getattr(hw, nama).value = 0.4
+    time.sleep(1.5)
+    getattr(hw, nama).value = 0.0
+    time.sleep(0.4)
+hw.stop()
+PY
+
+# berbelok di tempat: kiri maju, kanan mundur
+python3 -c "import hardware,time;hw=hardware.make();hw.drive(0.45,-0.45);time.sleep(1.5);hw.stop()"
 ```
 
-Kalau salah satu roda berputar terbalik, tukar pin maju/mundur motor itu di
-`config.py` — jangan tukar kabel di driver secara asal, karena urutannya juga
-dipakai saat memutar badan.
+Periksa satu per satu: keempat roda harus berputar **maju** (menuju depan bodi).
+Kalau satu roda terbalik, tukar pin maju/mundur motor itu di `config.py` — jangan
+tukar kabel di driver secara asal, karena urutan pin juga dipakai saat memutar
+badan. Uji belok terakhir memastikan kedua sisi melawan arah dengan benar; kalau
+robot justru maju lurus, salah satu sisi masih terbalik.
 
 ## 3. Pasang Raspberry Pi dan pastikan kamera terlihat
 
@@ -281,7 +318,7 @@ Semua logika bisa diuji tanpa Pi, kamera, atau model — cukup Python + OpenCV:
 ```bash
 python3 main.py --dry-run --seconds 10                  # PB1 otomatis, detektor palsu
 python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                   # 54 tes
+python3 -m unittest discover -s tests                   # 56 tes
 python3 tests/uji_integrasi_dunia.py                    # loop tertutup dunia sintetis
 ```
 
@@ -345,7 +382,7 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
 | `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
 | `scripts/install_pi.sh` | dependensi + unit systemd |
-| `tests/` | 54 unit test + uji integrasi dunia |
+| `tests/` | 56 unit test + uji integrasi dunia |
 
 ### D. Kalau bermasalah
 
@@ -362,6 +399,10 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
   `GRACE_HILANG_S` atau turunkan `CONF_MIN`.
 - **Robot tidak bergerak walau duty 0,4** — deadband motor atau baterai drop; ukur
   tegangan VM saat motor jalan.
+- **Robot menarik ke satu sisi walau lurus** — diameter roda tidak sama atau satu
+  motor lebih lemah; tukar posisi roda kiri/kanan untuk memastikan penyebabnya.
+- **Belok tersendat / roda berdecit** — normal pada 4WD bodi kaku (roda menyeret);
+  naikkan `SPEED_PUTAR`, atau kurangi grip roda depan.
 - **Robot berputar terus padahal tanpa tombol** — pin motor tertukar dengan pin
   tombol, atau `SPEED_MIN` terlalu tinggi sehingga motor tidak pernah benar-benar 0.
 - **Kamera 5 FPS / gelap** — `KAMERA_MJPG=True` belum berlaku; cek dengan perintah
