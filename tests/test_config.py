@@ -24,7 +24,6 @@ def semua_pin():
         "pb teh": C.PIN_PB_TEH,
         "led": C.PIN_LED,
         "buzzer": C.PIN_BUZZER,
-        "servo pan": C.PIN_SERVO_PAN,
     }
 
 
@@ -37,6 +36,12 @@ class TesPin(unittest.TestCase):
     def test_pin_dalam_rentang_bcm_yang_ada(self):
         for nama, pin in semua_pin().items():
             self.assertTrue(0 <= pin <= 27, f"{nama} di GPIO{pin} tidak ada di header")
+
+    def test_gpio12_sengaja_kosong(self):
+        # servo pan dibatalkan: kamera dipasang tetap, GPIO12 tidak diklaim siapa pun
+        self.assertNotIn(12, semua_pin().values())
+        self.assertFalse(hasattr(C, "PIN_SERVO_PAN"))
+        self.assertFalse(hasattr(C, "PAKAI_SERVO_PAN"))
 
     def test_pin_i2c_dan_uart_tidak_dipakai(self):
         # 0/1 = ID_SD/ID_SC (EEPROM), 14/15 = UART serial konsol
@@ -66,7 +71,7 @@ class TesAmbang(unittest.TestCase):
 
 class TesJalurVisi(unittest.TestCase):
     def test_backend_dikenal(self):
-        self.assertIn(C.VISION_BACKEND, {"yolo", "yolo-sync", "fake"})
+        self.assertEqual(C.VISION_BACKEND, "yolo")
 
     def test_dua_kelas_sesuai_urutan_training(self):
         self.assertEqual(C.YOLO_KELAS, ["kopi", "teh"])
@@ -81,9 +86,10 @@ class TesJalurVisi(unittest.TestCase):
         self.assertGreater(C.YOLO_NMS, 0.0)
         self.assertLess(C.YOLO_NMS, 1.0)
 
-    def test_async_wajib_untuk_pi_3b(self):
-        self.assertTrue(C.YOLO_ASYNC, "deteksi >1 s/frame tidak boleh menahan loop")
-        self.assertGreater(C.ASYNC_BASI_S, 0)
+    def test_batas_hasil_basi_wajar(self):
+        # deteksi lama tidak boleh dipercaya selamanya (YOLO ~1 s/frame)
+        self.assertGreater(C.ASYNC_BASI_S, C.ASYNC_BASI_S * 0.0)
+        self.assertLess(C.ASYNC_BASI_S, 10.0)
 
 
 if __name__ == "__main__":

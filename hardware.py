@@ -1,4 +1,4 @@
-"""Lapisan hardware: 2 motor DC (MX1508), 2 tombol, LED, buzzer, servo opsional.
+"""Lapisan hardware: 2 motor DC (MX1508), 2 tombol, LED, buzzer.
 
 Dua implementasi:
   Hardware     -> Raspberry Pi + gpiozero
@@ -25,13 +25,6 @@ class Hardware:
                            backward=C.PIN_MOTOR_KANAN_MUNDUR)
         self.led = LED(C.PIN_LED)
         self.buzzer = Buzzer(C.PIN_BUZZER)
-        self.servo = None
-        if C.PAKAI_SERVO_PAN:
-            from gpiozero import AngularServo
-            self.servo = AngularServo(C.PIN_SERVO_PAN,
-                                      min_angle=-90, max_angle=90,
-                                      min_pulse_width=0.0005,
-                                      max_pulse_width=0.0025)
 
         self._antrian = deque()
         self.pb = {}
@@ -54,10 +47,6 @@ class Hardware:
         self.kiri.value = 0.0
         self.kanan.value = 0.0
 
-    def pan(self, derajat):
-        if self.servo is not None:
-            self.servo.angle = C.clamp(derajat, -90, 90)
-
     # ------------------------------------------------------------------- suara
     def beep(self, n=1, dur=0.12):
         for _ in range(n):
@@ -71,7 +60,6 @@ class Hardware:
 
     def close(self):
         self.stop()
-        self.pan(0)
         self.led.off()
         self.buzzer.off()
         for tombol in self.pb.values():
@@ -85,7 +73,6 @@ class FakeHardware:
         self._antrian = deque()
         self.aksi = []
         self.drive_terakhir = (0.0, 0.0)
-        self.pan_derajat = 0.0
         self.led = False
         self.ditutup = False
 
@@ -104,10 +91,6 @@ class FakeHardware:
     def stop(self):
         self.drive_terakhir = (0.0, 0.0)
         self.aksi.append(("stop",))
-
-    def pan(self, derajat):
-        self.pan_derajat = derajat
-        self.aksi.append(("pan", derajat))
 
     def beep(self, n=1, dur=0.12):
         self.aksi.append(("beep", n))

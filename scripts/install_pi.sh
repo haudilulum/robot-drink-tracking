@@ -15,7 +15,7 @@ sudo apt-get install -y python3-opencv python3-numpy python3-gpiozero python3-lg
 
 # cek cepat sebelum service dipasang
 cd "$DIR"
-python3 tangkap.py --cek || echo "!! kamera belum terbaca — cek kabel/kabel ribbon webcam"
+python3 -c "import cv2;c=cv2.VideoCapture(0);c.set(cv2.CAP_PROP_FOURCC,cv2.VideoWriter_fourcc(*'MJPG'));ok,f=c.read();print('kamera',int(c.get(3)),'x',int(c.get(4)),'@',round(c.get(5)),'fps','frame=ada' if ok else 'frame=GAGAL')" || echo "!! kamera belum terbaca — cek kabel webcam"
 
 sed -e "s|__DIR__|$DIR|g" -e "s|__USER__|$USER_RUN|g" \
     "$DIR/systemd/robot-drink-tracking.service" | sudo tee "$UNIT" >/dev/null

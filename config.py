@@ -21,12 +21,9 @@ PIN_PB_KOPI = 17            # PB1, tombol ke GND, pull-up internal, tanpa resist
 PIN_PB_TEH = 27             # PB2
 PIN_LED = 22                # LED indikator + resistor 330 ohm ke GND
 PIN_BUZZER = 18             # buzzer aktif (3-5 V) atau lewat transistor
-PIN_SERVO_PAN = 12          # opsional, SG90; VCC dari 5 V eksternal, GND disatukan
 
-# Servo pan dimatikan secara default: kamera dipasang tetap dan robot mencari
-# dengan memutar badannya. Nyalakan hanya kalau servonya benar-benar terpasang
-# DAN driver PWM-nya stabil (gpiozero butuh pigpio/lgpio; tanpa itu servo gemetar).
-PAKAI_SERVO_PAN = False
+# GPIO12 sengaja tidak dipakai: kamera dipasang tetap di bodi, robot "melihat ke
+# samping" dengan memutar badannya sendiri. Tidak ada servo pan di proyek ini.
 
 # ---------------------------------------------------------------- Tombol
 BOUNCE_S = 0.06             # debounce gpiozero; event-driven, tidak ada press yang hilang
@@ -63,7 +60,6 @@ PAUSE_SAMPAI_S = 0.25       # jeda sebelum kembali IDLE setelah sampai
 # ---------------------------------------------------------------- Kamera
 KAMERA_INDEKS = 0
 FRAME_W, FRAME_H = 640, 480
-PROC_W, PROC_H = 320, 240   # pemrosesan diperkecil: ~4x lebih cepat di Pi 3B+
 KAMERA_MJPG = True          # wajib di Pi 3B+: tanpa MJPG frame drop jadi ~5 FPS
 KAMERA_BUFFER = 1           # selalu ambil frame terbaru, jangan antre frame lama
 WARMUP_FRAME = 10           # buang frame awal (kamera masih gelap/AE belum stabil)
@@ -71,19 +67,18 @@ WARMUP_FRAME = 10           # buang frame awal (kamera masih gelap/AE belum stab
 # ---------------------------------------------------------------- Visi
 # Satu jalur identifikasi: model YOLO 2 kelas (kopi, teh) hasil training sendiri,
 # diekspor ke ONNX. Tidak ada ambang warna di proyek ini.
-#   "yolo"      : model di thread terpisah + kotak dirapatkan optical flow
-#   "yolo-sync" : model di loop utama, hanya untuk mengukur latency
-#   "fake"      : pengganti saat --dry-run
+#   "yolo" : model di thread terpisah + kotak dirapatkan optical flow
+#   "fake" : pengganti saat --dry-run (tanpa kamera, tanpa model)
 VISION_BACKEND = "yolo"
 
 PROC_W, PROC_H = 320, 240        # frame kecil untuk optical flow & hemat memori
+                                 # (kamera tetap 640x480; hanya flow memakai 320x240)
 
 YOLO_MODEL_PATH = "models/kopi_teh_yolov8n.onnx"
 YOLO_KELAS = ["kopi", "teh"]     # urutan HARUS sama dengan saat training
 YOLO_IMGSZ = 320                 # 320 cukup; 640 terlalu berat untuk Pi 3B+
 YOLO_NMS = 0.45
 CONF_MIN = 0.35                  # ambang keyakinan deteksi
-YOLO_ASYNC = True               # deteksi di thread terpisah (WAJIB: YOLO ~1,2 s/frame)
 YOLO_ALUR = True                # geser kotak dengan optical flow di antara deteksi
 YOLO_ASYNC_JEDA_S = 0.35        # jarak antar pemeriksaan; 0 = secepat thread mampu
 ASYNC_BASI_S = 1.5              # hasil deteksi lebih tua dari ini dianggap hilang

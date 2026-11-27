@@ -59,6 +59,14 @@ class TesSatuJalur(unittest.TestCase):
     def test_alat_kalibrasi_hsv_sudah_dihapus(self):
         self.assertFalse((AKAR / "kalibrasi.py").exists())
 
+    def test_tidak_ada_jalur_kedua(self):
+        # satu jalur saja: tidak ada backend sinkron, tidak ada servo pan
+        kode = (AKAR / "vision.py").read_text() + (AKAR / "hardware.py").read_text()
+        self.assertNotIn("yolo-sync", kode)
+        self.assertNotIn("AngularServo", kode)
+        self.assertFalse((AKAR / "tangkap.py").exists(),
+                         "dataset diambil di laptop; repo tidak perlu alat tangkap")
+
     def test_backend_default_yolo(self):
         self.assertEqual(C.VISION_BACKEND, "yolo")
         self.assertEqual(C.YOLO_KELAS, ["kopi", "teh"])

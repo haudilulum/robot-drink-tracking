@@ -251,7 +251,7 @@ def main(argv=None):
                     help="tanpa GPIO dan kamera (hardware + visi palsu)")
     ap.add_argument("--seconds", type=float, default=0, help="batas waktu uji (detik)")
     ap.add_argument("--vision", default=None,
-                    choices=["yolo", "yolo-sync", "fake"],
+                    choices=["yolo", "fake"],
                     help="backend visi (menimpa config)")
     ap.add_argument("--debug", metavar="DIR", default=None,
                     help="simpan frame beranotasi tiap N frame")
@@ -273,7 +273,7 @@ def main(argv=None):
 
     robot = Robot(verbose=not args.diam)
     print(f"visi={os.environ.get('VISION_BACKEND', C.VISION_BACKEND)} "
-          f"servo_pan={'ya' if C.PAKAI_SERVO_PAN else 'tidak'} "
+
           f"berhenti_di_w={C.W_BERHENTI:.2f}")
     print("siap — PB1 = kopi, PB2 = teh. Ctrl-C untuk keluar.")
 

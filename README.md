@@ -64,8 +64,8 @@ melanjutkannya sampai `GRACE_HILANG_S` lewat.
    saat dipakai. Jumlah bukan target: 120 foto yang bervariasi mengalahkan 300
    foto hasil burst yang nyaris identik. Yang dihitung adalah variasi —
    terang/gelap, jarak 20/40/60/100 cm, gelas di kiri/tengah/kanan frame, dua
-   jenis meja, ada/tidak ada gelas lain di latar. `python3 tangkap.py --jumlah 120`
-   di Pi, atau webcam USB yang dicolok ke laptop.
+   jenis meja, ada/tidak ada gelas lain di latar. Ambil dengan webcam USB yang
+   dicolok ke laptop — kamera yang sama dengan yang nanti dipasang di robot.
 2. Upload ke Roboflow, beri label `kopi` / `teh` (satu kotak per gelas; gelas lain
    yang bukan target jangan dilabeli).
 3. Augmentasi cahaya + blur secukupnya, lalu train (Roboflow hosted atau Colab).
@@ -90,7 +90,7 @@ bentuk berbeda) supaya kelasnya punya pembeda.
 | PB2 (teh) | 27 | idem |
 | LED status | 22 | + resistor 330 Ω ke GND |
 | Buzzer | 18 | buzzer aktif 3–5 V, atau lewat transistor |
-| Servo pan (opsional) | 12 | default **dimatikan** (`PAKAI_SERVO_PAN=False`), kamera dipasang tetap |
+| GPIO 12 | — | sengaja kosong; tidak ada servo pan, kamera dipasang tetap |
 
 Daya: 2S 7.4 V ke VM MX1508 (maksimum 10 V), GND baterai–Pi–driver **disatukan**.
 Jangan mengambil daya motor dari 5 V Pi, dan jangan memparalel dua motor pada satu
@@ -102,7 +102,7 @@ kanal MX1508 (batas kontinu ±1,2–1,5 A per kanal).
 sudo apt update
 sudo apt install -y python3-opencv python3-numpy python3-gpiozero python3-lgpio
 cd ~/robot-drink-tracking
-python3 tangkap.py --cek        # ukur FPS kamera + kecerahan
+python3 -c "import cv2;c=cv2.VideoCapture(0);c.set(cv2.CAP_PROP_FOURCC,cv2.VideoWriter_fourcc(*'MJPG'));ok,f=c.read();print('kamera',int(c.get(3)),'x',int(c.get(4)),'@',round(c.get(5)),'fps','frame=ada' if ok else 'frame=GAGAL')"
 python3 main.py                 # butuh models/kopi_teh_yolov8n.onnx
 ```
 
@@ -173,7 +173,7 @@ kalau gelas jauh tidak terbaca.
 ```bash
 python3 main.py --dry-run --seconds 10                 # PB1 otomatis, model fake
 python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                  # 52 tes
+python3 -m unittest discover -s tests                  # 54 tes
 python3 tests/uji_integrasi_dunia.py                   # dunia sintetis closed-loop
 ```
 
@@ -188,11 +188,10 @@ untuk tes ini.
 | Berkas | Isi |
 |---|---|
 | `config.py` | pin, ambang, gain, setelan model & gerak |
-| `hardware.py` | motor/tombol/LED/buzzer/servo + versi palsu untuk tes |
+| `hardware.py` | motor/tombol/LED/buzzer + versi palsu untuk tes |
 | `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
-| `tangkap.py` | ambil foto dataset, rekam video, ukur FPS & kecerahan |
-| `tests/` | 52 unit test + uji integrasi dunia |
+| `tests/` | 54 unit test + uji integrasi dunia |
 
 ## Troubleshooting
 
@@ -203,15 +202,15 @@ untuk tes ini.
 - **`w=` tidak pernah mencapai `W_BERHENTI`.** Kotak terpotong tepi frame; robot
   terlalu dekat atau kamera menunduk terlalu tajam.
 - **Kamera gelap / 5 FPS.** Pastikan `KAMERA_MJPG=True`; tanpa MJPG webcam jatuh ke
-  YUYV dan frame drop. Cek dengan `python3 tangkap.py --cek`.
+  YUYV dan frame drop. Cek dengan perintah `python3 -c` di bagian pemasangan.
 - **Robot tidak bergerak walau duty 0,4.** Deadband motor terlalu tinggi atau
   baterai drop. Ukur tegangan VM saat motor jalan.
 - **Robot berputar terus di IDLE.** Pin motor tertukar dengan pin tombol, atau
   `SPEED_MIN` terlalu tinggi sehingga motor tidak pernah benar-benar 0.
 - **Robot berhenti-maju berulang saat mendekat.** Deteksi sering putus; naikkan
   `GRACE_HILANG_S` atau turunkan `CONF_MIN`.
-- **Servo gemetar.** Pakai `python3-gpiozero` + `python3-lgpio`, atau biarkan
-  `PAKAI_SERVO_PAN=False` (default) dan biarkan badan robot yang menyapu.
+- **Deteksi hanya jalan di laptop, bukan di robot.** Dataset diambil dengan
+  kamera yang berbeda. Ambil ulang dari webcam yang dipasang di robot.
 
 ## Yang belum ada
 

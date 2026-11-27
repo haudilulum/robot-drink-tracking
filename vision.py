@@ -7,7 +7,6 @@ makin dekat gelasnya.
 Backend yang tersedia (pilih di config.VISION_BACKEND atau --vision):
   yolo    : model 2 kelas ONNX lewat cv2.dnn, dijalankan di thread terpisah
             (tanpa torch; wajib async karena satu frame butuh ~1,2 s di Pi 3B+)
-  yolo-sync : sama, tapi deteksi menahan loop — hanya untuk mengukur/menyetel
   fake    : simulasi untuk menguji state machine tanpa kamera
 """
 
@@ -379,7 +378,7 @@ def make(backend=None, kamera=None):
     backend = backend or os.environ.get("VISION_BACKEND", C.VISION_BACKEND)
     if backend == "fake":
         return FakeDetector()
-    if backend not in ("yolo", "yolo-sync", "fake"):
+    if backend not in ("yolo", "fake"):
         raise ValueError(f"backend visi tidak dikenal: {backend}")
     if not ADA_CV:
         raise RuntimeError("opencv belum terpasang (sudo apt install python3-opencv)")
@@ -390,14 +389,8 @@ def make(backend=None, kamera=None):
             f"model YOLO belum ada: {C.YOLO_MODEL_PATH}\n"
             "latih dulu di Roboflow/Colab lalu taruh berkas ONNX di models/")
     kamera = kamera if kamera is not None else Kamera()
-    if backend == "yolo-sync":
-        return YoloDetector(kamera)
-    if backend == "yolo":
-        det = YoloDetector(kamera)
-        if not C.YOLO_ASYNC:
-            return det
-        return AlurDetector(AsyncDetector(det), aktif=C.YOLO_ALUR)
-    raise ValueError(f"backend visi tidak dikenal: {backend!r}")
+    # YOLO selalu async: satu frame butuh ~1,2 s, loop kendali tidak boleh menunggu.
+    return AlurDetector(AsyncDetector(YoloDetector(kamera)), aktif=C.YOLO_ALUR)
 
 
 # --------------------------------------------------------------------- debug

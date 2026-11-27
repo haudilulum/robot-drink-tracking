@@ -81,7 +81,7 @@ class TesAsync(unittest.TestCase):
         import config as C
         kode = inspect.getsource(vision.make)
         self.assertIn("AsyncDetector", kode)
-        self.assertTrue(C.YOLO_ASYNC, "deteksi YOLO harus async untuk Pi 3B+")
+        self.assertNotIn("YOLO_ASYNC", kode, "tidak ada jalan sinkron: YOLO selalu async")
 
 
 if __name__ == "__main__":
