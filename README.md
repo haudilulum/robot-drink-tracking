@@ -29,6 +29,34 @@ ada di gambar. Jadi yang dibedakan adalah penandanya. Tiga backend disediakan:
 | `bentuk` | siluet gelas: mug lebar vs gelas tinggi | gelas yang bentuknya beda | tanpa penanda; rapuh kalau gelas separuh di belakang benda lain |
 | `yolo` | model 2 kelas hasil latih | dataset + training | paling tahan variasi; butuh ±300 foto dan waktu training |
 
+### Kalau memilih jalur YOLO (Roboflow)
+
+Pembuatan model dilakukan di laptop/Colab, bukan di Pi — jadi biaya training
+tidak jadi soal. Yang jadi soal adalah **inference**: YOLOv8n ONNX 640×640 di
+`cv2.dnn` pada CPU kelas Cortex-A53 terukur **1171 ms/frame (0,85 FPS)**,
+sementara HSV blob 320×240 hanya **4,9 ms (≈200 FPS)**.
+
+Karena itu backend `yolo` sekarang otomatis membungkus model dalam
+`vision.AsyncDetector`: model berjalan di thread sendiri, loop kendali tetap
+mengambil hasil terakhir tanpa menunggu (terukur: loop tetap ~16–20 Hz saat model
+butuh 1,2 s per frame). Hasil yang lebih tua dari `ASYNC_BASI_S` dibuang agar
+robot tidak mengejar posisi gelas lama. Backend `yolo-sync` (menahan loop) hanya
+untuk menyetel/mengukur.
+
+Alur pembuatan model:
+
+1. `python3 tangkap.py --jumlah 300` — foto dari **kamera dan sudut pemasangan
+   yang sama** dengan saat dipakai; sertakan variasi terang/gelap dan posisi.
+2. Upload ke Roboflow, beri label `kopi` / `teh`, augmentasi cahaya + blur.
+3. Train (Roboflow hosted atau Colab gratis), export **ONNX** dengan input 320.
+4. `models/kopi_teh_yolov8n.onnx`, lalu `python3 main.py --vision yolo`.
+5. `YOLO_KELAS` di `config.py` harus sama urutannya dengan saat training.
+
+Yang perlu disadari: model tetap hanya bisa membedakan apa yang **terlihat beda**.
+Kalau dua gelasnya identik, akurasi training tidak menolong — penandanya tetap
+yang dipakai. YOLO menggantikan kerapuhan HSV terhadap cahaya, bukan menggantikan
+penanda.
+
 Saran praktis: **tempel stiker/lakban warna di gelas** (kopi = coklat/oranye,
 teh = hijau) lalu pakai backend `penanda`. Ini yang paling cepat stabil dan
 paling mudah dibela saat demo.
@@ -100,7 +128,7 @@ osilasi kiri-kanan) dan `SPEED_MAJU`.
 ```bash
 python3 main.py --dry-run --seconds 10                 # PB1 otomatis
 python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                  # 54 tes
+python3 -m unittest discover -s tests                  # 59 tes
 python3 tests/uji_integrasi_dunia.py                   # kamera sintetis closed-loop
 ```
 
@@ -118,7 +146,7 @@ berhenti dengan gelas di tengah — bukan cuma apakah detektor menyala.
 | `main.py` | state machine + CLI |
 | `kalibrasi.py` | saran rentang HSV dari foto (tanpa GUI) |
 | `tangkap.py` | ambil foto, rekam video, ukur FPS & kecerahan |
-| `tests/` | 54 unit test + uji integrasi |
+| `tests/` | 59 unit test + uji integrasi |
 
 ## Troubleshooting
 

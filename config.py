@@ -95,6 +95,9 @@ YOLO_MODEL_PATH = "models/kopi_teh_yolov8n.onnx"
 YOLO_KELAS = ["kopi", "teh"]     # urutan HARUS sama dengan saat training
 YOLO_IMGSZ = 320                 # 320 cukup; 640 terlalu berat untuk Pi 3B+
 YOLO_NMS = 0.45
+YOLO_ASYNC = True               # deteksi di thread terpisah (WAJIB: YOLO ~1,2 s/frame)
+YOLO_ASYNC_JEDA_S = 0.35        # jarak antar pemeriksaan; 0 = secepat thread mampu
+ASYNC_BASI_S = 1.5              # hasil deteksi lebih tua dari ini dianggap hilang
 
 
 def clamp(v, lo, hi):

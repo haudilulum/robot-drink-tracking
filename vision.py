@@ -7,11 +7,14 @@ makin dekat gelasnya.
 Backend yang tersedia (pilih di config.VISION_BACKEND atau --vision):
   penanda : HSV blob pada penanda warna gelas (tutup/stiker/gelas berwarna)
   bentuk  : siluet gelas, dibedakan dari rasio tinggi/lebar
-  yolo    : model 2 kelas ONNX lewat cv2.dnn (tanpa torch, ringan di Pi 3B+)
+  yolo    : model 2 kelas ONNX lewat cv2.dnn, dijalankan di thread terpisah
+            (tanpa torch; wajib async karena satu frame butuh ~1,2 s di Pi 3B+)
+  yolo-sync : sama, tapi deteksi menahan loop — hanya untuk mengukur/menyetel
   fake    : simulasi untuk menguji state machine tanpa kamera
 """
 
 import os
+import threading
 import time
 
 import config as C
@@ -309,18 +312,91 @@ class FakeDetector:
         pass
 
 
+class AsyncDetector:
+    """Jalankan deteksi mahal (YOLO) di thread terpisah.
+
+    Loop kendali tetap berjalan 20 Hz: ``detect(frame)`` hanya menyerahkan frame
+    terbaru ke thread pekerja, lalu langsung mengembalikan hasil terakhir — tidak
+    pernah menunggu. Tanpa ini, YOLOv8n di Pi 3B+ menghentikan robot ~1,2 detik
+    setiap kali memeriksa gambar, dan fase mencari menjadi tersendat.
+
+    Hasil yang lebih tua dari ``batas_usang_s`` sengaja dibuang (dianggap target
+    hilang) supaya robot tidak mengejar posisi gelas yang sudah tidak berlaku.
+    """
+
+    def __init__(self, dalam, jeda_s=None, batas_usang_s=None):
+        self.dalam = dalam
+        self.jeda_s = C.YOLO_ASYNC_JEDA_S if jeda_s is None else jeda_s
+        self.batas_usang_s = C.ASYNC_BASI_S if batas_usang_s is None else batas_usang_s
+        self._frame = None
+        self._nomor = 0
+        self._diproses = 0
+        self._hasil = []
+        self._waktu = 0.0
+        self._kunci = threading.Lock()
+        self._bangun = threading.Event()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._kerja, name="deteksi-async", daemon=True)
+        self._thread.start()
+
+    def read(self):
+        return self.dalam.read()
+
+    def detect(self, frame):
+        if frame is not None:
+            with self._kunci:
+                self._frame = frame
+                self._nomor += 1
+            self._bangun.set()
+        with self._kunci:
+            if self._hasil and time.monotonic() - self._waktu > self.batas_usang_s:
+                return []
+            return list(self._hasil)
+
+    def close(self):
+        self._stop.set()
+        self._bangun.set()
+        self._thread.join(timeout=2.0)
+        self.dalam.close()
+
+    def _kerja(self):
+        while not self._stop.is_set():
+            if not self._bangun.wait(timeout=0.2):
+                continue
+            self._bangun.clear()
+            with self._kunci:
+                if self._frame is None or self._nomor == self._diproses:
+                    continue
+                frame, nomor = self._frame, self._nomor
+            mulai = time.monotonic()
+            try:
+                hasil = self.dalam.detect(frame)
+            except Exception:                    # jangan biarkan thread mati diam-diam
+                hasil = []
+            with self._kunci:
+                self._diproses = nomor
+                self._hasil = hasil
+                self._waktu = time.monotonic()
+            sisa = self.jeda_s - (time.monotonic() - mulai)
+            if sisa > 0:
+                self._stop.wait(sisa)
+
+
 # -------------------------------------------------------------------- pabrik
 def make(backend=None, kamera=None):
     backend = backend or os.environ.get("VISION_BACKEND", C.VISION_BACKEND)
     if backend == "fake":
         return FakeDetector()
-    if backend not in ("yolo", "bentuk", "penanda"):
+    if backend not in ("yolo", "yolo-sync", "bentuk", "penanda"):
         raise ValueError(f"backend visi tidak dikenal: {backend}")
     if not ADA_CV:
         raise RuntimeError("opencv belum terpasang (sudo apt install python3-opencv)")
     kamera = kamera if kamera is not None else Kamera()
-    if backend == "yolo":
+    if backend == "yolo-sync":
         return YoloDetector(kamera)
+    if backend == "yolo":
+        det = YoloDetector(kamera)
+        return AsyncDetector(det) if C.YOLO_ASYNC else det
     if backend == "bentuk":
         return ShapeDetector(kamera)
     return MarkerDetector(kamera)
