@@ -114,6 +114,37 @@ Model ONNX dijalankan lewat `cv2.dnn`, **tanpa** `ultralytics`/torch, supaya RAM
 1 GB tidak habis. Kalau `models/` belum berisi model, `main.py` berhenti dengan
 pesan `model YOLO belum ada: ...` sebelum menyentuh kamera.
 
+## Jarak dari lebar kotak (tanpa sensor tambahan)
+
+Tidak ada VL53L0X/ultrasonik: jarak ditebak dari lebar kotak deteksi. Alasannya
+geometri kamera biasa —
+
+```
+lebar_piksel = f * LEBAR_GELAS / Z        (f = fokus dalam piksel, Z = jarak)
+```
+
+jadi `Z = f * LEBAR_GELAS / lebar_piksel`. Karena itu lebar kotak ternormalisasi
+(`w` 0..1) berbanding terbalik dengan jarak: dua kali lebih dekat = kotak dua kali
+lebih lebar. `W_BERHENTI` **adalah** jarak berhenti, hanya dinyatakan dalam
+satuan `w`; Anda tidak perlu tahu `f` — cukup ukur sekali di lantai (langkah 1 di
+bawah) dan ambang itu otomatis berarti jarak yang Anda inginkan.
+
+Batas ketelitiannya jujur saja: galat relatif jarak ≈ galat relatif lebar. Kotak
+yang bergetar 10% berarti jarak meleset 10% — pada jarak berhenti 40 cm itu ±4 cm,
+masih wajar. Karena itu ada dua penjaga di `main.py`:
+
+- lebar diratakan **median 3 deteksi terakhir** (`W_FILTER_N`), supaya satu frame
+  yang kebetulan besar tidak membuat robot berhenti terlalu awal;
+- kotak yang **menyentuh tepi frame** dianggap terpotong: lebarnya justru terukur
+  lebih kecil dari aslinya, jadi kalau `w` sudah ≥ 80% `W_BERHENTI` robot langsung
+  berhenti — kalau tidak, ia akan terus maju dan menabrak gelas yang sudah
+  memenuhi pandangan.
+
+Yang tidak bisa dilakukan cara ini: mengukur jarak ke benda yang ukurannya berbeda
+(gelas tinggi vs mug lebar). Kalau di demo dipakai dua gelas berukuran beda,
+setel `W_BERHENTI` untuk yang paling kecil, atau tambahkan ToF sebagai
+pembanding.
+
 ## Yang perlu disetel di lantai
 
 Angka di `config.py` adalah nilai awal, bukan hasil ukur. Yang wajib diukur hanya
@@ -138,7 +169,7 @@ kalau gelas jauh tidak terbaca.
 ```bash
 python3 main.py --dry-run --seconds 10                 # PB1 otomatis, model fake
 python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                  # 49 tes
+python3 -m unittest discover -s tests                  # 52 tes
 python3 tests/uji_integrasi_dunia.py                   # dunia sintetis closed-loop
 ```
 
@@ -157,7 +188,7 @@ untuk tes ini.
 | `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
 | `tangkap.py` | ambil foto dataset, rekam video, ukur FPS & kecerahan |
-| `tests/` | 49 unit test + uji integrasi dunia |
+| `tests/` | 52 unit test + uji integrasi dunia |
 
 ## Troubleshooting
 
@@ -182,7 +213,7 @@ untuk tes ini.
 
 - Model terlatih di repo ini — `models/` kosong; dataset dan training dilakukan
   terpisah (`~/coffee-tea-dataset` baru berisi skrip).
-- Pengukur jarak sesungguhnya (VL53L0X/ultrasonik) — jarak ditebak dari lebar
-  kotak, jadi akurasinya bergantung pada ukuran gelas dan sudut kamera.
+- Pengukur jarak sesungguhnya (VL53L0X/ultrasonik) — sekarang jarak ditebak dari
+  lebar kotak, jadi akurasinya bergantung pada ukuran gelas dan sudut kamera.
 - Deteksi halangan saat maju (minimal bumper switch).
 - Log CSV per sesi (target, waktu tempuh, `w` akhir) untuk evaluasi.

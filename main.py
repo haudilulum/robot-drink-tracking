@@ -12,6 +12,7 @@ Lihat gambar kotak: python3 main.py --debug --vision yolo
 """
 
 import argparse
+import collections
 import os
 import sys
 import time
@@ -42,6 +43,7 @@ class Robot:
         self.deteksi_terakhir = []
         self.perintah_ingat = (0.0, 0.0)   # duty terakhir saat maju ke target
         self.generasi_stabil = -1          # generasi hasil deteksi yang dihitung
+        self.lebar_riwayat = collections.deque(maxlen=C.W_FILTER_N)
 
     # ---------------------------------------------------------------- utilitas
     def log(self, *a):
@@ -66,6 +68,7 @@ class Robot:
         self.t_fase = self.jam()
         self.perintah_ingat = (0.0, 0.0)
         self.generasi_stabil = -1
+        self.lebar_riwayat.clear()
         self.hw.led_set(True)
         self.log(f"tombol {target} -> mulai mencari")
 
@@ -191,7 +194,25 @@ class Robot:
             return
 
         self.t_lihat = t
-        if d.w >= C.W_BERHENTI:
+
+        # Jarak ditebak dari lebar kotak: w = f * LEBAR_GELAS / Z. Dua penjaga
+        # supaya tebakan ini tidak menipu:
+        #  - kotak menyentuh tepi kiri/kanan = gelas lebih lebar dari frame,
+        #    lebarnya terpotong sehingga angkanya justru terlalu kecil;
+        #  - nilai antar deteksi diratakan median supaya satu frame yang
+        #    kebetulan besar tidak membuat robot berhenti.
+        menyentuh_tepi = ((d.cx - d.w / 2) <= C.TEPI_FRAME or
+                          (d.cx + d.w / 2) >= 1.0 - C.TEPI_FRAME)
+        if menyentuh_tepi and d.w >= C.W_BERHENTI * 0.8:
+            self.log(f"gelas memenuhi frame (w={d.w:.2f}) -> sampai")
+            self.sampai()
+            return
+        if not menyentuh_tepi:
+            self.lebar_riwayat.append(d.w)
+        urut = sorted(self.lebar_riwayat)
+        lebar = urut[len(urut) // 2] if urut else d.w
+
+        if lebar >= C.W_BERHENTI:
             self.sampai()
             return
 
@@ -200,10 +221,10 @@ class Robot:
             return
 
         # gas: penuh saat jauh, turun linier saat mendekat (anti-tabrak)
-        if d.w <= C.W_MULAI_PELAN:
+        if lebar <= C.W_MULAI_PELAN:
             dasar = C.SPEED_MAJU
         else:
-            f = ((d.w - C.W_MULAI_PELAN) /
+            f = ((lebar - C.W_MULAI_PELAN) /
                  (C.W_BERHENTI - C.W_MULAI_PELAN))
             dasar = C.SPEED_MAJU + (C.SPEED_MIN - C.SPEED_MAJU) * C.clamp(f, 0, 1)
 

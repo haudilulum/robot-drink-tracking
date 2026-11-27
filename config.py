@@ -39,6 +39,11 @@ KP_BELOK = 0.85             # P-gain: error tengah frame -> belok
 SPEED_PUTAR = 0.50          # duty saat memutar badan untuk mencari
 W_MULAI_PELAN = 0.30        # lebar bbox / lebar frame saat mulai mengurangi gas
 W_BERHENTI = 0.48           # lebar bbox / lebar frame -> anggap sudah sampai
+                            # lebar kotak = f * LEBAR_GELAS / Z (Z = jarak), jadi
+                            # ambang ini setara jarak berhenti tertentu: ukur
+                            # sekali di lantai, catat w dari log --debug.
+W_FILTER_N = 3              # median lebar N deteksi terakhir (tekan jitter)
+TEPI_FRAME = 0.02           # kotak lebih dekat dari ini ke tepi = terpotong
 
 # ---------------------------------------------------------------- Pencarian (putar-periksa)
 SUDUT_LANGKAH = 30          # derajat per langkah putar

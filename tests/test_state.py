@@ -289,3 +289,40 @@ class TesGenerasiStabil(unittest.TestCase):
             r.step(None)
             jam.maju(0.05)
         self.assertEqual(r.state, "DEKATI")
+
+
+class TesJarakDariKotak(unittest.TestCase):
+    """Jarak ditebak dari lebar kotak; dua penjaga harus bekerja."""
+
+    def test_satu_frame_besar_tidak_membuat_berhenti(self):
+        det = DetUji([kotak(w=0.40)])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        jalankan(r, jam, 1 + C.FRAME_STABIL + 2)
+        self.assertEqual(r.state, "DEKATI")
+
+        det.daftar = [kotak(w=0.55)]        # satu deteksi kebetulan besar
+        r.step(None)
+        self.assertEqual(r.state, "DEKATI", "median menahan lonjakan satu frame")
+
+        jalankan(r, jam, 2)                 # 0.55 berulang -> memang sudah dekat
+        self.assertEqual(r.state, "IDLE")
+
+    def test_kotak_terpotong_tepi_dianggap_sudah_dekat(self):
+        # kanan kotak melewati tepi -> lebar terukur lebih kecil dari aslinya,
+        # jadi tanpa penjaga robot akan terus maju menabrak gelas
+        det = DetUji([kotak(cx=0.78, w=0.45)])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        jalankan(r, jam, 1 + C.FRAME_STABIL + 2)
+        self.assertEqual(r.state, "IDLE")
+
+    def test_kotak_terpotong_tapi_kecil_tidak_menghentikan(self):
+        det = DetUji([kotak(cx=0.06, w=0.10)])
+        r, hw, jam = robot_uji(det)
+        hw.tekan("kopi")
+        jalankan(r, jam, 1 + C.FRAME_STABIL + 2)
+        self.assertEqual(r.state, "DEKATI")
+        self.assertEqual(len(r.lebar_riwayat), 0,
+                         "lebar terpotong tidak boleh masuk riwayat jarak")
+
