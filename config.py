@@ -10,8 +10,12 @@ Tidak ada ambang warna di proyek ini; tidak ada yang perlu dikalibrasi HSV.
 """
 
 # ---------------------------------------------------------------- Pin (BCM)
-# Motor kiri  : MX1508 kanal A (PWM masuk ke IN, arah dari pin pasangannya)
-# Motor kanan : MX1508 kanal B
+# Dua modul MX1508, satu modul per motor, dan hanya kanal A (IN1/IN2) yang dipakai:
+#   modul 1 (kiri)  : IN1=23, IN2=24, OUT1/OUT2 -> motor kiri,  IN3/IN4 -> GND
+#   modul 2 (kanan) : IN1=5,  IN2=6,  OUT1/OUT2 -> motor kanan, IN3/IN4 -> GND
+# 2 pin per motor sudah cukup karena MX1508 tidak punya ENA/ENB: PWM masuk ke pin
+# IN, arah ditentukan pin pasangannya (IN1 PWM + IN2 rendah = maju, dibalik =
+# mundur). Modul kedua menambah arus, bukan menambah pin.
 PIN_MOTOR_KIRI_MAJU = 23
 PIN_MOTOR_KIRI_MUNDUR = 24
 PIN_MOTOR_KANAN_MAJU = 5
