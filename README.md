@@ -1,7 +1,7 @@
 # Robot Drink Tracking
 
 Robot beroda dua yang **mengantar pesanan**: tekan tombol, robot memutar badannya
-mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya dan berbunyi.
+mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya.
 
 - **PB1 → kopi**, **PB2 → teh**.
 - Kopi dan teh dibedakan oleh **model YOLO hasil latih sendiri** (Roboflow → ONNX),
@@ -14,10 +14,10 @@ mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya dan berbunyi
 
 ```
 IDLE ──PB1/PB2──▶ CARI (putar 30°, diam, periksa, ulangi) ──target stabil──▶ DEKATI
-DEKATI ──gelas sudah cukup besar──▶ SAMPAI (stop + beep 1×) ──▶ IDLE
+DEKATI ──gelas sudah cukup besar──▶ SAMPAI (stop) ──▶ IDLE
 DEKATI ──target hilang > 1 s──▶ CARI
-CARI   ──20 s tanpa target──▶ GAGAL (beep 2×) ──▶ IDLE
-DEKATI ──30 s tak pernah sampai──▶ GAGAL (beep 2×) ──▶ IDLE
+CARI   ──20 s tanpa target──▶ GAGAL ──▶ IDLE
+DEKATI ──30 s tak pernah sampai──▶ GAGAL ──▶ IDLE
 tombol yang sama ditekan saat bergerak ──▶ berhenti seketika
 tombol lain ditekan saat bergerak ──▶ ganti target, mulai cari lagi
 ```
@@ -48,14 +48,11 @@ setelah robotnya bisa melihat (tahap 3).
 | Modul driver MX1508 | 2 | 4 kanal terpakai, **satu motor satu kanal**; jangan diparalel (batas ±1,2–1,5 A/kanal) |
 | Motor DC gearbox + roda | 4 set | motor "TT" kuning sudah cukup; 4 roda digerakkan semua |
 | Baterai 2S (7,4 V) | 1 | 2× 18650 + holder, atau LiPo 2S; **maksimal 10 V** ke MX1508 |
-| Saklar + sekring | 1 | sekring 5 A (empat motor jalan bersamaan) |
+| Saklar on/off | 1 | pemutus daya baterai |
 | Push button | 2 | tombol tekan biasa, tidak perlu modul |
-| LED + resistor 330 Ω | 1 | indikator status |
-| Buzzer aktif 3–5 V | 1 | yang berbunyi sendiri saat diberi tegangan |
-| Bodi | 1 | akrilik/3D print; kamera dipasang tetap, **tidak** pakai servo |
+| Bodi | 1 | akrilik/3D print; kamera dipasang tetap di depan bodi |
 
-Yang **tidak** dibutuhkan: roda bebas/castor, servo pan, sensor jarak, layar,
-keyboard. Karena keempat roda digerakkan (skid-steer), bodi tidak butuh titik
+Yang **tidak** dibutuhkan: roda bebas/castor, sensor jarak, layar, keyboard. Karena keempat roda digerakkan (skid-steer), bodi tidak butuh titik
 tumpu ketiga — castor hanya dipakai pada robot 2WD. Robot sepenuhnya dikendalikan
 dua tombol, dan jarak ditebak dari ukuran kotak deteksi.
 
@@ -71,9 +68,7 @@ dua tombol, dan jarak ditebak dari ukuran kotak deteksi.
 | modul 2 kanal B → **kanan belakang** | 19 (IN3) / 26 (IN4) | OUT3/OUT4 ke motor kanan belakang |
 | PB1 (kopi) | 17 | tombol ke GND, pull-up internal, tanpa resistor |
 | PB2 (teh) | 27 | idem |
-| LED status | 22 | anoda ke GPIO22, katoda lewat 330 Ω ke GND |
-| Buzzer | 18 | aktif 3–5 V; kalau bervolume kecil, tambahkan transistor |
-| GPIO 12 | — | sengaja dibiarkan kosong (tidak ada servo pan) |
+| GPIO 12 / 18 / 22 | — | tidak dipakai |
 
 ### Empat kanal, delapan pin
 
@@ -126,7 +121,7 @@ yang tidak identik akan saling menyeret).
 
 ### Daya
 
-- Baterai 2S → **VM** MX1508, GND baterai–Pi–driver **disatukan**. GND yang tidak
+- Baterai 2S → **VM** MX1508 lewat saklar, GND baterai–Pi–driver **disatukan**. GND yang tidak
   disatukan adalah penyebab paling sering "motor diam padahal duty 0,5".
 - Jangan mengambil daya motor dari 5 V Pi. Jangan memasang beban motor langsung ke
   pin GPIO tanpa driver.
@@ -190,7 +185,7 @@ kabel/kamera lain yang memakai `/dev/video0` (`ls /dev/video*`). Kalau FPS
 tertulis 5, kamera tidak masuk mode MJPG — gambar akan tersendat dan robot
 terlihat "berpikir lama".
 
-Cek tombol dan LED tanpa menggerakkan motor:
+Cek kedua tombol tanpa menggerakkan motor:
 
 ```bash
 python3 -c "import hardware;hw=hardware.make();print('tekan tombol (Ctrl-C keluar)');[print('  ->',hw.read_button()) or __import__('time').sleep(0.1) for _ in iter(int,1)]"
@@ -293,7 +288,10 @@ terlewat di antara dua deteksi yang berjarak ±1 s.
 kiri-kanan. Terlalu kecil: gelas keluar frame sebelum sempat dikoreksi.
 
 Setelah empat angka ini benar, robot sudah memenuhi konsep: tekan tombol,
-menyapu mencari, mendekat, berhenti, beep.
+menyapu mencari, mendekat, berhenti.
+
+Tandanya hanya gerak: **sampai** = robot diam tepat di depan gelas, **gagal** =
+robot diam tanpa pernah mendekat (sebabnya ada di log).
 
 ## 7. Jalankan sebagai service
 
@@ -378,7 +376,7 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
 | Berkas | Isi |
 |---|---|
 | `config.py` | pin, ambang, gain, setelan model & gerak — satu tempat untuk semua angka |
-| `hardware.py` | motor/tombol/LED/buzzer + versi palsu untuk tes |
+| `hardware.py` | motor/tombol + versi palsu untuk tes |
 | `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
 | `scripts/install_pi.sh` | dependensi + unit systemd |

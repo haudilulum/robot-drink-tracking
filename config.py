@@ -32,11 +32,10 @@ PIN_MOTOR_KANAN_BELAKANG_MUNDUR = 26
 
 PIN_PB_KOPI = 17            # PB1, tombol ke GND, pull-up internal, tanpa resistor
 PIN_PB_TEH = 27             # PB2
-PIN_LED = 22                # LED indikator + resistor 330 ohm ke GND
-PIN_BUZZER = 18             # buzzer aktif (3-5 V) atau lewat transistor
+# GPIO 12, 18, 22 tidak dipakai.
 
 # GPIO12 sengaja tidak dipakai: kamera dipasang tetap di bodi, robot "melihat ke
-# samping" dengan memutar badannya sendiri. Tidak ada servo pan di proyek ini.
+# samping" dengan memutar badannya sendiri.
 
 # ---------------------------------------------------------------- Tombol
 BOUNCE_S = 0.06             # debounce gpiozero; event-driven, tidak ada press yang hilang

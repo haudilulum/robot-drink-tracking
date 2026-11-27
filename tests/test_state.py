@@ -69,13 +69,12 @@ def jalankan(r, jam, langkah, dt=0.05):
 
 
 class TesMulai(unittest.TestCase):
-    def test_pb_kopi_masuk_cari_dan_led_nyala(self):
+    def test_pb_kopi_masuk_cari(self):
         r, hw, jam = robot_uji()
         hw.tekan("kopi")
         r.step(None)
         self.assertEqual(r.state, "CARI")
         self.assertEqual(r.target, "kopi")
-        self.assertTrue(hw.led)
 
     def test_pb_teh_memilih_target_teh(self):
         r, hw, _ = robot_uji()
@@ -93,7 +92,7 @@ class TesMulai(unittest.TestCase):
         r.step(None)
         self.assertEqual(r.state, "IDLE")
         self.assertEqual(hw.drive_terakhir, (0.0, 0.0))
-        self.assertFalse(hw.led)
+        self.assertIn(("stop",), hw.aksi)
 
     def test_tombol_lain_mengganti_target(self):
         r, hw, jam = robot_uji(DetUji([kotak("kopi", w=0.2)]))
@@ -121,7 +120,7 @@ class TesSampai(unittest.TestCase):
         r.step(None)
         self.assertEqual(r.state, "IDLE")
         self.assertEqual(hw.drive_terakhir, (0.0, 0.0))
-        self.assertIn(("beep", 1), hw.aksi)
+        self.assertIn(("stop",), hw.aksi)
 
     def test_gas_turun_saat_mendekat(self):
         r, hw, jam = robot_uji(DetUji([kotak(w=0.15)]))
@@ -147,13 +146,12 @@ class TesSampai(unittest.TestCase):
 
 
 class TesGagal(unittest.TestCase):
-    def test_timeout_cari_menyerah_dan_beep_dua_kali(self):
+    def test_timeout_cari_menyerah(self):
         r, hw, jam = robot_uji(DetUji([]))
         hw.tekan("kopi")
         r.step(None)
         jalankan(r, jam, int(C.TIMEOUT_CARI_S / 0.05) + 5)
         self.assertEqual(r.state, "IDLE")
-        self.assertIn(("beep", 2), hw.aksi)
         self.assertEqual(hw.drive_terakhir, (0.0, 0.0))
 
     def test_timeout_dekati_menyerah(self):
@@ -162,7 +160,7 @@ class TesGagal(unittest.TestCase):
         jalankan(r, jam, 1)
         jalankan(r, jam, int(C.TIMEOUT_DEKATI_S / 0.05) + 5)
         self.assertEqual(r.state, "IDLE")
-        self.assertIn(("beep", 2), hw.aksi)
+        self.assertEqual(hw.drive_terakhir, (0.0, 0.0))
 
     def test_target_hilang_saat_dekati_kembali_cari(self):
         det = DetUji([kotak(w=0.25)])

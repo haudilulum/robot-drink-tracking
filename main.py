@@ -69,12 +69,10 @@ class Robot:
         self.perintah_ingat = (0.0, 0.0)
         self.generasi_stabil = -1
         self.lebar_riwayat.clear()
-        self.hw.led_set(True)
         self.log(f"tombol {target} -> mulai mencari")
 
     def berhenti(self, alasan=""):
         self.hw.stop()
-        self.hw.led_set(False)
         self.target = None
         if hasattr(self.det, "set_target"):
             self.det.set_target(None)
@@ -83,16 +81,12 @@ class Robot:
 
     def sampai(self):
         self.hw.stop()
-        self.hw.led_set(False)
-        self.hw.beep(1)
         self.log(f"sampai di {self.target}")
         self.tidur(C.PAUSE_SAMPAI_S)
         self.berhenti("(sampai)")
 
     def gagal(self, alasan):
         self.hw.stop()
-        self.hw.led_set(False)
-        self.hw.beep(2)
         self.log(f"menyerah: {alasan}")
         self.target = None
         if hasattr(self.det, "set_target"):

@@ -1,4 +1,4 @@
-"""Lapisan hardware: 4 motor DC 4WD (2 modul MX1508), 2 tombol, LED, buzzer.
+"""Lapisan hardware: 4 motor DC 4WD (2 modul MX1508) dan 2 push button.
 
 Empat roda digerakkan semua (skid-steer). Sisi kiri dan sisi kanan selalu diberi
 duty yang sama, jadi kontrol tetap dua angka: (kiri, kanan).
@@ -21,7 +21,7 @@ import config as C
 
 class Hardware:
     def __init__(self):
-        from gpiozero import Button, Motor, Buzzer, LED
+        from gpiozero import Button, Motor
 
         self.kiri_depan = Motor(forward=C.PIN_MOTOR_KIRI_DEPAN_MAJU,
                                 backward=C.PIN_MOTOR_KIRI_DEPAN_MUNDUR)
@@ -31,9 +31,6 @@ class Hardware:
                                  backward=C.PIN_MOTOR_KANAN_DEPAN_MUNDUR)
         self.kanan_belakang = Motor(forward=C.PIN_MOTOR_KANAN_BELAKANG_MAJU,
                                     backward=C.PIN_MOTOR_KANAN_BELAKANG_MUNDUR)
-        self.led = LED(C.PIN_LED)
-        self.buzzer = Buzzer(C.PIN_BUZZER)
-
         self._antrian = deque()
         self.pb = {}
         for nama, pin in (("kopi", C.PIN_PB_KOPI), ("teh", C.PIN_PB_TEH)):
@@ -60,21 +57,8 @@ class Hardware:
                      self.kanan_depan, self.kanan_belakang):
             roda.value = 0.0
 
-    # ------------------------------------------------------------------- suara
-    def beep(self, n=1, dur=0.12):
-        for _ in range(n):
-            self.buzzer.on()
-            time.sleep(dur)
-            self.buzzer.off()
-            time.sleep(dur)
-
-    def led_set(self, nyala):
-        self.led.value = 1 if nyala else 0
-
     def close(self):
         self.stop()
-        self.led.off()
-        self.buzzer.off()
         for tombol in self.pb.values():
             tombol.close()
 
@@ -86,7 +70,6 @@ class FakeHardware:
         self._antrian = deque()
         self.aksi = []
         self.drive_terakhir = (0.0, 0.0)
-        self.led = False
         self.ditutup = False
 
     # Tes / dry-run memanggil ini untuk meniru jari menekan tombol.
@@ -104,13 +87,6 @@ class FakeHardware:
     def stop(self):
         self.drive_terakhir = (0.0, 0.0)
         self.aksi.append(("stop",))
-
-    def beep(self, n=1, dur=0.12):
-        self.aksi.append(("beep", n))
-
-    def led_set(self, nyala):
-        self.led = bool(nyala)
-        self.aksi.append(("led", self.led))
 
     def close(self):
         self.ditutup = True

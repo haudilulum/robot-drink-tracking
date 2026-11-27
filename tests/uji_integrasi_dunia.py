@@ -89,8 +89,8 @@ def jalankan(label, cx_awal, hue=12):
             break
 
     masalah = []
-    if ("beep", 1) not in hw.aksi:
-        masalah.append("tidak sampai (tidak ada beep)")
+    if ("stop",) not in hw.aksi:
+        masalah.append("motor tidak pernah dihentikan")
     if r.state != "IDLE":
         masalah.append(f"state akhir {r.state}")
     if hw.drive_terakhir != (0.0, 0.0):
@@ -105,7 +105,7 @@ def jalankan(label, cx_awal, hue=12):
     if arah_awal == "kiri" and not any(d[1] > d[0] for d in belok):
         masalah.append("tidak berbelok kiri")
 
-    print(f"{label}: langkah={len(jejak)} cx_akhir={dunia.cx:.2f} beep={[a for a in hw.aksi if a[0]=='beep']} "
+    print(f"{label}: langkah={len(jejak)} cx_akhir={dunia.cx:.2f} "
           f"-> {'LULUS' if not masalah else 'GAGAL: ' + '; '.join(masalah)}")
     return not masalah
 

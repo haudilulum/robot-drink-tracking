@@ -26,8 +26,6 @@ def semua_pin():
         "kanan belakang mundur": C.PIN_MOTOR_KANAN_BELAKANG_MUNDUR,
         "pb kopi": C.PIN_PB_KOPI,
         "pb teh": C.PIN_PB_TEH,
-        "led": C.PIN_LED,
-        "buzzer": C.PIN_BUZZER,
     }
 
 
@@ -41,11 +39,10 @@ class TesPin(unittest.TestCase):
         for nama, pin in semua_pin().items():
             self.assertTrue(0 <= pin <= 27, f"{nama} di GPIO{pin} tidak ada di header")
 
-    def test_gpio12_sengaja_kosong(self):
-        # servo pan dibatalkan: kamera dipasang tetap, GPIO12 tidak diklaim siapa pun
-        self.assertNotIn(12, semua_pin().values())
-        self.assertFalse(hasattr(C, "PIN_SERVO_PAN"))
-        self.assertFalse(hasattr(C, "PAKAI_SERVO_PAN"))
+    def test_gpio12_18_22_tidak_dipakai(self):
+        terpakai = set(semua_pin().values())
+        for pin in (12, 18, 22):
+            self.assertNotIn(pin, terpakai, f"GPIO{pin} mestinya kosong")
 
     def test_pin_i2c_dan_uart_tidak_dipakai(self):
         # 0/1 = ID_SD/ID_SC (EEPROM), 14/15 = UART serial konsol
@@ -56,8 +53,7 @@ class TesPin(unittest.TestCase):
 class TesPenggerak(unittest.TestCase):
     def test_empat_roda_tiap_motor_kanal_sendiri(self):
         # 4 motor butuh 8 pin: tidak ada yang diparalel
-        motor = [k for k in semua_pin() if k not in
-                 ("pb kopi", "pb teh", "led", "buzzer")]
+        motor = [k for k in semua_pin() if k not in ("pb kopi", "pb teh")]
         self.assertEqual(len(motor), 8, motor)
 
     def test_lapisan_hardware_mendrive_empat_motor(self):
