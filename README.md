@@ -6,7 +6,7 @@ mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya.
 - **PB1 → kopi**, **PB2 → teh**.
 - Kopi dan teh dibedakan oleh **model YOLO hasil latih sendiri** (Roboflow → ONNX),
   bukan ambang warna.
-- Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS **Trixie Lite 32-bit**,
+- Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS **32-bit (Trixie)***,
   webcam USB, 2× driver MX1508, 4 motor DC gearbox (4WD).
 
 > Status: kode selesai dan teruji (56 tes, uji loop tertutup). Yang belum ada di
@@ -43,7 +43,7 @@ setelah robotnya bisa melihat (tahap 3).
 | Bagian | Jumlah | Catatan |
 |---|---|---|
 | Raspberry Pi 3B+ | 1 | 1 GB RAM; 4/5 boleh, tapi angka di repo ini diukur untuk 3B+ |
-| microSD 16 GB+ | 1 | Raspberry Pi OS **Trixie Lite 32-bit** (Debian 13) |
+| microSD 16 GB+ | 1 | Raspberry Pi OS **32-bit** (Debian 13, Trixie) |
 | Webcam USB (UVC) | 1 | yang mendukung **MJPG** 640×480 @30 FPS |
 | Modul driver MX1508 | 2 | 4 kanal terpakai, **satu motor satu kanal**; jangan diparalel (batas ±1,2–1,5 A/kanal) |
 | Motor DC gearbox + roda | 4 set | motor "TT" kuning sudah cukup; 4 roda digerakkan semua |
@@ -68,7 +68,6 @@ dua tombol, dan jarak ditebak dari ukuran kotak deteksi.
 | modul 2 kanal B → **kanan belakang** | 19 (IN3) / 26 (IN4) | OUT3/OUT4 ke motor kanan belakang |
 | PB1 (kopi) | 17 | tombol ke GND, pull-up internal, tanpa resistor |
 | PB2 (teh) | 27 | idem |
-| GPIO 12 / 18 / 22 | — | tidak dipakai |
 
 ### Empat kanal, delapan pin
 
@@ -167,10 +166,19 @@ robot justru maju lurus, salah satu sisi masih terbalik.
 
 ## 3. Pasang Raspberry Pi OS Trixie dan pastikan kamera terlihat
 
-Repo ini diuji untuk **Raspberry Pi OS Trixie Lite 32-bit** (Debian 13, Python 3.13,
-OpenCV 4.10 dari apt). Pakai **Lite**, bukan Desktop: Desktop memakai ±250 MB RAM
-tambahan, dan Pi 3B+ hanya punya 1 GB. Image **64-bit** juga jalan dengan kode yang
-sama, tapi sisa RAM untuk kamera + model lebih ketat.
+Repo ini diuji untuk **Raspberry Pi OS (32-bit) Trixie** — image "Raspberry Pi OS
+(32-bit)" dengan Desktop, Debian 13, Python 3.13, OpenCV 4.10 dari apt. Image
+**64-bit** juga jalan dengan kode yang sama, tapi sisa RAM untuk kamera + model
+lebih ketat di board 1 GB.
+
+Image Desktop boleh dipakai, tapi robot tidak butuh layar. Kalau RAM terasa sesak
+saat model + kamera jalan, ubah boot ke console:
+
+```bash
+sudo raspi-config   # System Options -> Boot / Auto Login -> Console autologin
+```
+
+Itu mematikan desktop (±250 MB) dan tetap menyisakan SSH.
 
 ```bash
 grep VERSION_CODENAME /etc/os-release          # harus: VERSION_CODENAME=trixie
