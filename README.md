@@ -387,9 +387,29 @@ Semua logika bisa diuji tanpa Pi, kamera, atau model — cukup Python + OpenCV:
 .venv/bin/python tests/uji_integrasi_dunia.py                    # loop tertutup dunia sintetis
 ```
 
-`uji_integrasi_dunia.py` menggeser gelas ke tengah saat robot berbelok dan
-membesarkannya saat robot maju, jadi yang diuji bukan cuma "detektor menyala",
-tapi apakah robot benar-benar berhenti dengan gelas di tengah frame.
+**Dua lapis, dua pertanyaan berbeda.**
+
+`unittest discover` (56 tes, ±2 s) menjawab *"apakah satu aturan masih benar"* —
+satu tes untuk satu aturan, jadi kalau gagal, namanya langsung menunjuk penyebabnya.
+`uji_integrasi_dunia.py` menjawab *"apakah semuanya bekerja bersama"*: kamera
+sintetis menggeser gelas ke tengah saat robot berbelok dan membesarkannya saat
+robot maju, lalu memeriksa robot berhenti dengan gelas di tengah frame
+(`cx_akhir=0.50`).
+
+Urutannya: unit test dulu. Kalau integrasi yang gagal tanpa unit test, Anda hanya
+tahu "robot tidak sampai" dan harus menebak apakah itu median lebar, penjaga kotak
+tepi, timeout, atau pemilihan target. Dengan unit test lulus, kegagalan integrasi
+berarti masalahnya di interaksi antar-bagian, bukan di satu aturan.
+
+Yang dicek masing-masing berkas tes:
+
+| Berkas | Menjaga |
+|---|---|
+| `test_config.py` (15) | peta pin tidak dobel, GPIO 12/18/22 kosong, urutan kelas, ambang berurutan |
+| `test_state.py` (22) | state machine: PB, timeout, target hilang sesaat, median lebar, kotak di tepi |
+| `test_vision.py` (10) | pemilihan target + penjaga jalur tunggal (HSV/bentuk tidak boleh kembali) |
+| `test_async.py` (5) | deteksi 1,2 s tidak menahan loop, hasil basi dibuang |
+| `test_alur.py` (4) | optical flow: kotak mengikuti gerakan, dilepas saat tekstur hilang |
 
 ---
 
@@ -447,7 +467,7 @@ Di Pi 3B+, YOLO nano ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teru
 | `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
 | `scripts/install_pi.sh` | dependensi (Trixie) + cek pustaka/kamera + unit systemd |
-| `tests/` | 56 unit test + uji integrasi dunia |
+| `tests/` | 5 berkas unit test (56 tes) + `uji_integrasi_dunia.py` (loop tertutup, manual) |
 
 ### D. Kalau bermasalah
 
