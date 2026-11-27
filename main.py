@@ -8,7 +8,7 @@ Alur:
 
 Jalan di Pi      : python3 main.py
 Uji tanpa HW     : python3 main.py --dry-run --seconds 20
-Lihat gambar kotak: python3 main.py --debug --vision penanda
+Lihat gambar kotak: python3 main.py --debug --vision yolo
 """
 
 import argparse
@@ -230,7 +230,7 @@ def main(argv=None):
                     help="tanpa GPIO dan kamera (hardware + visi palsu)")
     ap.add_argument("--seconds", type=float, default=0, help="batas waktu uji (detik)")
     ap.add_argument("--vision", default=None,
-                    choices=["penanda", "bentuk", "yolo", "fake"],
+                    choices=["yolo", "yolo-sync", "fake"],
                     help="backend visi (menimpa config)")
     ap.add_argument("--debug", metavar="DIR", default=None,
                     help="simpan frame beranotasi tiap N frame")

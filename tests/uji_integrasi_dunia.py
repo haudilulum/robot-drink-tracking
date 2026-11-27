@@ -1,7 +1,8 @@
-"""Uji integrasi: kamera sintetis closed-loop -> MarkerDetector -> Robot.
+"""Uji integrasi: dunia sintetis closed-loop -> Robot (tanpa HSV, tanpa model).
 
-Kamera meniru dunia nyata: gelas bergeser ke tengah saat robot berbelok, dan
-membesar saat robot maju. Ini menguji loop kendali, bukan cuma detektor.
+Gelas bergeser ke tengah saat robot berbelok dan membesar saat robot maju.
+Detektornya menggantikan model YOLO: ia membaca keadaan dunia langsung, jadi
+yang teruji adalah loop kendali — bukan akurasi model.
 """
 import pathlib
 import sys
@@ -39,13 +40,25 @@ class Dunia:
         return img
 
 
-class KameraDunia:
-    def __init__(self, dunia, hw):
-        self.dunia, self.hw = dunia, hw
+class DetektorDunia:
+    """Pengganti model YOLO: kotak diambil dari keadaan dunia, bukan dari piksel."""
 
-    def baca(self):
+    def __init__(self, dunia, hw, label="kopi"):
+        self.dunia, self.hw, self.label = dunia, hw, label
+        self.generasi = 0
+
+    def read(self):
         kiri, kanan = self.hw.drive_terakhir
-        return self.dunia.frame(kiri, kanan)
+        self.dunia.frame(kiri, kanan)      # gelas bergeser sesuai gerak robot
+        return self.dunia
+
+    def detect(self, dunia):
+        self.generasi += 1                 # tiap panggilan = deteksi baru
+        u = dunia.u / C.FRAME_W
+        return [vision.Deteksi(self.label, dunia.cx, 0.5, u, u, 0.90)]
+
+    def close(self):
+        pass
 
 
 class Jam:
@@ -62,8 +75,7 @@ class Jam:
 def jalankan(label, cx_awal, hue=12):
     dunia = Dunia(h=hue, cx=cx_awal)
     hw = hw_mod.FakeHardware()
-    kam = KameraDunia(dunia, hw)
-    det = vision.MarkerDetector(kamera=kam)
+    det = DetektorDunia(dunia, hw, label=label)
     jam = Jam()
     r = Robot(hw=hw, det=det, verbose=False, jam=jam, tidur=lambda _s: None)
 

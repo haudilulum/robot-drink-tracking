@@ -10,74 +10,71 @@ Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS 32-bit, webcam UV
 ```
 IDLE ──PB1/PB2──▶ CARI (putar 30°, periksa, ulangi) ──target stabil──▶ DEKATI
 DEKATI ──gelas cukup besar──▶ SAMPAI (stop + beep 1×) ──▶ IDLE
-DEKATI ──target hilang > 1 s──▶ CARI
+DEKATI ──target hilang > GRACE_HILANG_S──▶ CARI
 CARI   ──20 s tanpa target──▶ GAGAL (beep 2×) ──▶ IDLE
 DEKATI ──30 s tidak sampai──▶ GAGAL (beep 2×) ──▶ IDLE
 tombol sama ditekan saat bergerak ──▶ berhenti seketika
 tombol lain ditekan saat bergerak ──▶ ganti target, mulai cari lagi
 ```
 
-## Masalah utama: kopi dan teh terlihat sama
+## Satu jalur: model YOLO dari Roboflow
 
-Isi kopi dan teh sama-sama cairan gelap. **Dari piksel saja keduanya tidak bisa
-dibedakan** — ini bukan soal model yang kurang canggih, informasinya memang tidak
-ada di gambar. Jadi yang dibedakan adalah penandanya. Tiga backend disediakan:
+Isi kopi dan teh sama-sama cairan gelap, jadi **dari warna saja keduanya tidak bisa
+dibedakan** — informasinya memang tidak ada di piksel cairan. Yang membuat mereka
+beda adalah gelas/penandanya. Karena itu satu-satunya jalur identifikasi di proyek
+ini adalah **model YOLO 2 kelas** yang dilatih di Roboflow (atau Colab) dan
+diekspor ke ONNX; robot hanya menjalankan model itu lewat `cv2.dnn`.
 
-| Backend | Yang dibedakan | Butuh | Kelebihan / kekurangan |
-|---|---|---|---|
-| `penanda` (default) | warna stiker/tutup/gelas | penanda warna beda | paling ringan (~25 FPS di Pi 3B+), tanpa dataset; salah kalau penanda tertutup tangan |
-| `bentuk` | siluet gelas: mug lebar vs gelas tinggi | gelas yang bentuknya beda | tanpa penanda; rapuh kalau gelas separuh di belakang benda lain |
-| `yolo` | model 2 kelas hasil latih | dataset + training | paling tahan variasi; butuh ±300 foto dan waktu training |
+Tidak ada ambang HSV, tidak ada `kalibrasi.py`, tidak ada deteksi bentuk. Berkas
+itu sudah dihapus, bukan dipindah.
 
-### Kalau memilih jalur YOLO (Roboflow)
+### Kenapa model, bukan ambang warna
 
-Pembuatan model dilakukan di laptop/Colab, bukan di Pi — jadi biaya training
-tidak jadi soal. Yang jadi soal adalah **inference**: YOLOv8n ONNX 640×640 di
-`cv2.dnn` pada CPU kelas Cortex-A53 terukur **1171 ms/frame (0,85 FPS)**,
-sementara HSV blob 320×240 hanya **4,9 ms (≈200 FPS)**.
+Ambang warna (HSV blob) bekerja kalau gelasnya diberi penanda warna tunggal, tapi
+rentangnya harus disetel ulang setiap kali lampu/meja berubah, dan satu rentang
+untuk `kopi` gampang tumpang tindih dengan `teh`. Model belajar bentuk, tekstur,
+dan konteks gelas sekaligus, sehingga lebih tahan perubahan cahaya. Harganya:
+perlu ±300 foto berlabel dan satu kali training.
 
-Angka Pi 3B+ yang sudah terukur di proyek `human-tracking-robot-v2`
-(tercatat di `config.yaml` sana): **640 → 4,1 s, 416 → 1,75 s, 320 → 1,03 s**
-per deteksi, dan TFLite int8 1,8× lebih cepat daripada ONNX fp32.
+### Biaya inference dan cara menutupinya
 
-Karena itu backend `yolo` otomatis memakai dua lapis:
+YOLOv8n ONNX 640×640 di `cv2.dnn` pada CPU kelas Cortex-A53 terukur
+**1171 ms/frame (0,85 FPS)**; di `human-tracking-robot-v2` angka Pi 3B+ tercatat
+**640 → 4,1 s, 416 → 1,75 s, 320 → 1,03 s** per deteksi (TFLite int8 1,8× lebih
+cepat dari ONNX fp32). Karena itu:
 
+- `YOLO_IMGSZ = 320` — satu deteksi ±1 s, cukup untuk target yang tidak bergerak.
 - `vision.AsyncDetector` — model berjalan di thread sendiri, loop kendali tidak
-  pernah menunggu (terukur di board uji: loop tetap ~16 Hz saat model butuh
-  1,17 s/frame).
+  pernah menunggu (terukur: loop tetap ~16 Hz saat model butuh 1,17 s/frame).
+  Hasil lebih tua dari `ASYNC_BASI_S` dibuang.
 - `vision.AlurDetector` — kotak digeser dengan optical flow Lucas-Kanade
   (~5 ms/frame) di setiap frame kamera, jadi kotak tetap menempel di gelas di
   antara dua deteksi. Bila titik fitur habis (gelas tertutup/buram), kotak
   dilepas dan state machine memperlakukannya sebagai target hilang.
 
-Pola ini sama dengan yang terbukti jalan di `human-tracking-robot-v2`; bedanya,
-target di sini (gelas) jauh lebih kecil daripada orang, jadi fase mencari tetap
-lebih rawan terlewat — putar badan lebih lambat saat memakai backend `yolo`.
-Flag: `YOLO_ASYNC`, `YOLO_ALUR`, `YOLO_ASYNC_JEDA_S`, `ASYNC_BASI_S`.
+Gelas **tidak bergerak**, jadi gerakan kotak di gambar berasal dari gerakan robot
+sendiri — itu justru yang diukur optical flow. Konsekuensi lain: deteksi yang
+putus sesaat bukan alasan berhenti; `main.py` menyimpan perintah terakhir dan
+melanjutkannya sampai `GRACE_HILANG_S` lewat.
 
-Penjelasan lain: model berjalan di thread sendiri, loop kendali tetap
-mengambil hasil terakhir tanpa menunggu (terukur: loop tetap ~16–20 Hz saat model
-butuh 1,2 s per frame). Hasil yang lebih tua dari `ASYNC_BASI_S` dibuang agar
-robot tidak mengejar posisi gelas lama. Backend `yolo-sync` (menahan loop) hanya
-untuk menyetel/mengukur.
+## Membuat model (Roboflow)
 
-Alur pembuatan model:
+1. `python3 tangkap.py --jumlah 300` — foto dari **kamera, sudut, dan ketinggian
+   pemasangan yang sama** dengan saat dipakai; sertakan variasi terang/gelap,
+   jarak, dan sudut pandang.
+2. Upload ke Roboflow, beri label `kopi` / `teh` (satu kotak per gelas; gelas lain
+   yang bukan target jangan dilabeli).
+3. Augmentasi cahaya + blur secukupnya, lalu train (Roboflow hosted atau Colab).
+4. Export **ONNX** dengan input **320**, simpan sebagai
+   `models/kopi_teh_yolov8n.onnx`.
+5. `YOLO_KELAS` di `config.py` harus sama urutannya dengan saat training
+   (`["kopi", "teh"]`).
+6. Uji: `python3 main.py --vision yolo --debug foto/debug`, periksa kotak di
+   `foto/debug/`.
 
-1. `python3 tangkap.py --jumlah 300` — foto dari **kamera dan sudut pemasangan
-   yang sama** dengan saat dipakai; sertakan variasi terang/gelap dan posisi.
-2. Upload ke Roboflow, beri label `kopi` / `teh`, augmentasi cahaya + blur.
-3. Train (Roboflow hosted atau Colab gratis), export **ONNX** dengan input 320.
-4. `models/kopi_teh_yolov8n.onnx`, lalu `python3 main.py --vision yolo`.
-5. `YOLO_KELAS` di `config.py` harus sama urutannya dengan saat training.
-
-Yang perlu disadari: model tetap hanya bisa membedakan apa yang **terlihat beda**.
-Kalau dua gelasnya identik, akurasi training tidak menolong — penandanya tetap
-yang dipakai. YOLO menggantikan kerapuhan HSV terhadap cahaya, bukan menggantikan
-penanda.
-
-Saran praktis: **tempel stiker/lakban warna di gelas** (kopi = coklat/oranye,
-teh = hijau) lalu pakai backend `penanda`. Ini yang paling cepat stabil dan
-paling mudah dibela saat demo.
+Model tetap hanya bisa membedakan apa yang **terlihat beda**. Kalau dua gelasnya
+identik, akurasi training tidak menolong — beri ciri visual (stiker, warna gelas,
+bentuk berbeda) supaya kelasnya punya pembeda.
 
 ## Pin (BCM, bukan nomor fisik header)
 
@@ -95,9 +92,6 @@ Daya: 2S 7.4 V ke VM MX1508 (maksimum 10 V), GND baterai–Pi–driver **disatuk
 Jangan mengambil daya motor dari 5 V Pi, dan jangan memparalel dua motor pada satu
 kanal MX1508 (batas kontinu ±1,2–1,5 A per kanal).
 
-Servo SG90 hanya dipakai kalau memang terpasang, dan PWM-nya harus dari
-**lgpio/pigpio** — dengan RPi.GPIO software PWM servo akan gemetar.
-
 ## Pasang di Raspberry Pi
 
 ```bash
@@ -105,7 +99,7 @@ sudo apt update
 sudo apt install -y python3-opencv python3-numpy python3-gpiozero python3-lgpio
 cd ~/robot-drink-tracking
 python3 tangkap.py --cek        # ukur FPS kamera + kecerahan
-python3 main.py
+python3 main.py                 # butuh models/kopi_teh_yolov8n.onnx
 ```
 
 Autostart saat boot:
@@ -116,98 +110,79 @@ sudo systemctl status robot-drink-tracking
 journalctl -u robot-drink-tracking -f
 ```
 
-Backend `yolo` tidak memakai `ultralytics`/torch — model ONNX dijalankan lewat
-`cv2.dnn`, supaya RAM 1 GB tidak habis. Taruh model di `models/kopi_teh_yolov8n.onnx`
-lalu jalankan `python3 main.py --vision yolo`.
+Model ONNX dijalankan lewat `cv2.dnn`, **tanpa** `ultralytics`/torch, supaya RAM
+1 GB tidak habis. Kalau `models/` belum berisi model, `main.py` berhenti dengan
+pesan `model YOLO belum ada: ...` sebelum menyentuh kamera.
 
-## Yang perlu dikalibrasi — pilih satu jalur, jangan ditumpuk
+## Yang perlu disetel di lantai
 
-Dua backend identifikasi itu **saling menggantikan**, bukan berlapis. Kalau Anda
-memakai `yolo` (Roboflow), kalibrasi HSV tidak berlaku sama sekali: `WARNA` tidak
-dibaca oleh `YoloDetector`, dan `kalibrasi.py` tidak perlu dijalankan.
+Angka di `config.py` adalah nilai awal, bukan hasil ukur. Yang wajib diukur hanya
+empat, dan tidak ada satu pun yang soal warna:
 
-### Jalur A — `penanda` / `bentuk`: kalibrasi HSV, tanpa dataset
+1. **`W_BERHENTI` / `W_MULAI_PELAN`** — letakkan gelas pada jarak berhenti yang
+   diinginkan, jalankan `python3 main.py --debug foto/debug`, baca `w=` pada log,
+   set `W_BERHENTI` ke nilai itu (`W_MULAI_PELAN` ±0,18 lebih kecil).
+2. **`SPEED_MIN`** — naikkan sampai robot benar-benar bergerak dari diam (motor
+   TT + 2S biasanya 0,30–0,40). Duty di bawah ini hanya membuat motor bergetar.
+3. **`DERAJAT_PER_DETIK`** — target ~45°/s: satu deteksi butuh ±1 s, jadi menyapu
+   lebih cepat dari itu membuat gelas terlewat di antara dua deteksi. Ukur dengan
+   busur: 12 langkah mode CARI harus ≈ 360°.
+4. **`KP_BELOK`** — terlalu besar = robot mengayun kiri-kanan; terlalu kecil =
+   gelas keluar frame sebelum sempat dikoreksi.
 
-Angka di `config.py` adalah nilai awal, bukan hasil ukur.
-
-1. **Warna penanda** — `python3 tangkap.py --jumlah 3`, lalu
-   `python3 kalibrasi.py foto/frame_1.jpg --auto --label kopi`. Tempel hasilnya ke
-   `config.py` bagian `WARNA`. Lakukan di ruangan tempat robot dipakai, bukan di
-   meja terang. Ulangi untuk `teh`.
-2. **Jarak berhenti** — letakkan gelas di jarak berhenti yang diinginkan, jalankan
-   `python3 main.py --debug foto/debug`, baca `w=` pada log, set `W_BERHENTI` ke nilai itu (dan
-   `W_MULAI_PELAN` ±0,18 lebih kecil).
-3. **Deadband motor** — naikkan `SPEED_MIN` sampai robot benar-benar bergerak
-   dari diam (motor TT + 2S biasanya 0,30–0,40). Kalau robot diam bergetar,
-   `SPEED_MIN` terlalu rendah.
-4. **Sudut putar** — ukur dengan busur: jalankan mode CARI, tandai posisi awal,
-   bandingkan dengan posisi setelah satu langkah. Sesuaikan `DERAJAT_PER_DETIK`
-   supaya 12 langkah ≈ 360°.
-
-### Jalur B — `yolo` (Roboflow): tidak ada HSV sama sekali
-
-Yang perlu disetel hanya ini, semuanya soal model dan gerak:
-
-1. **`YOLO_KELAS`** — urutan harus sama persis dengan saat training (`["kopi", "teh"]`).
-2. **`CONF_MIN`** — 0,35 awal; naikkan kalau potongan latar ikut terdeteksi,
-   turunkan kalau gelas jauh tidak terbaca.
-3. **`W_BERHENTI` / `W_MULAI_PELAN`** — tetap dari log `w=` saat `--debug`, sama
-   seperti jalur A.
-4. **`DERAJAT_PER_DETIK`** — turunkan ke ~45: satu deteksi butuh 1,75 s (416),
-   jadi menyapu terlalu cepat membuat gelas terlewat di antara dua deteksi.
-
-### Berlaku untuk kedua jalur
-
-**Deadband motor** dan **sudut putar** di atas tetap wajib, begitu juga
-`KP_BELOK` (terlalu besar = osilasi kiri-kanan) dan `SPEED_MAJU`. Ini soal
-mekanik, bukan soal visi.
+`CONF_MIN` (0,35 awal) dinaikkan kalau potongan latar ikut terdeteksi, diturunkan
+kalau gelas jauh tidak terbaca.
 
 ## Uji tanpa hardware
 
 ```bash
-python3 main.py --dry-run --seconds 10                 # PB1 otomatis
+python3 main.py --dry-run --seconds 10                 # PB1 otomatis, model fake
 python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                  # 63 tes
-python3 tests/uji_integrasi_dunia.py                   # kamera sintetis closed-loop
+python3 -m unittest discover -s tests                  # 49 tes
+python3 tests/uji_integrasi_dunia.py                   # dunia sintetis closed-loop
 ```
 
 `uji_integrasi_dunia.py` menutup loop kendali: gelas bergeser ke tengah saat robot
 berbelok dan membesar saat robot maju, jadi terlihat apakah robot benar-benar
-berhenti dengan gelas di tengah — bukan cuma apakah detektor menyala.
+berhenti dengan gelas di tengah — bukan cuma apakah detektor menyala. Detektornya
+menggantikan model (membaca keadaan dunia langsung), jadi model tidak dibutuhkan
+untuk tes ini.
 
 ## Berkas
 
 | Berkas | Isi |
 |---|---|
-| `config.py` | semua pin, ambang, gain, rentang HSV |
+| `config.py` | pin, ambang, gain, setelan model & gerak |
 | `hardware.py` | motor/tombol/LED/buzzer/servo + versi palsu untuk tes |
-| `vision.py` | kamera, deteksi `penanda` / `bentuk` / `yolo` / `fake` |
+| `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
-| `kalibrasi.py` | saran rentang HSV dari foto (tanpa GUI) |
-| `tangkap.py` | ambil foto, rekam video, ukur FPS & kecerahan |
-| `tests/` | 63 unit test + uji integrasi |
+| `tangkap.py` | ambil foto dataset, rekam video, ukur FPS & kecerahan |
+| `tests/` | 49 unit test + uji integrasi dunia |
 
 ## Troubleshooting
 
+- **`model YOLO belum ada`.** ONNX hasil export Roboflow belum ditaruh di
+  `models/kopi_teh_yolov8n.onnx`.
+- **Kelas tertukar (kopi dianggap teh).** `YOLO_KELAS` tidak sama urutannya dengan
+  training; urutan mengikuti `data.yaml` di Roboflow.
+- **`w=` tidak pernah mencapai `W_BERHENTI`.** Kotak terpotong tepi frame; robot
+  terlalu dekat atau kamera menunduk terlalu tajam.
 - **Kamera gelap / 5 FPS.** Pastikan `KAMERA_MJPG=True`; tanpa MJPG webcam jatuh ke
   YUYV dan frame drop. Cek dengan `python3 tangkap.py --cek`.
 - **Robot tidak bergerak walau duty 0,4.** Deadband motor terlalu tinggi atau
   baterai drop. Ukur tegangan VM saat motor jalan.
 - **Robot berputar terus di IDLE.** Pin motor tertukar dengan pin tombol, atau
   `SPEED_MIN` terlalu tinggi sehingga motor tidak pernah benar-benar 0.
-- **Meja ikut terdeteksi sebagai kopi.** Saturasi penanda terlalu rendah —
-  `kalibrasi.py` akan memperingatkan kalau S < 45.
-- **Robot berhenti terlalu cepat.** `W_BERHENTI` terlalu kecil, atau gelas
-  terpotong tepi frame sehingga lebar kotak tidak pernah mencapai ambang.
-  Pastikan gelas masuk penuh di frame saat mendekat.
+- **Robot berhenti-maju berulang saat mendekat.** Deteksi sering putus; naikkan
+  `GRACE_HILANG_S` atau turunkan `CONF_MIN`.
 - **Servo gemetar.** Pakai `python3-gpiozero` + `python3-lgpio`, atau biarkan
   `PAKAI_SERVO_PAN=False` (default) dan biarkan badan robot yang menyapu.
 
 ## Yang belum ada
 
-- Pengukur jarak sesungguhnya (VL53L0X/ultrasonik) — sekarang jarak ditebak dari
-  lebar kotak, jadi akurasinya bergantung pada ukuran penanda.
-- Deteksi halangan saat maju (minimal bumper switch) dan penghindaran rintangan.
+- Model terlatih di repo ini — `models/` kosong; dataset dan training dilakukan
+  terpisah (`~/coffee-tea-dataset` baru berisi skrip).
+- Pengukur jarak sesungguhnya (VL53L0X/ultrasonik) — jarak ditebak dari lebar
+  kotak, jadi akurasinya bergantung pada ukuran gelas dan sudut kamera.
+- Deteksi halangan saat maju (minimal bumper switch).
 - Log CSV per sesi (target, waktu tempuh, `w` akhir) untuk evaluasi.
-- Dataset & training model 2 kelas; kerangka skripnya ada di `~/coffee-tea-dataset`
-  (`prepare.py`, `train_colab.ipynb`) tapi belum ada gambarnya.

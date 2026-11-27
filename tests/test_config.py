@@ -55,9 +55,6 @@ class TesAmbang(unittest.TestCase):
         self.assertLess(C.W_MULAI_PELAN, C.W_BERHENTI)
         self.assertLessEqual(C.W_BERHENTI, 1.0)
 
-    def test_luas_minimum_masuk_akal(self):
-        self.assertLess(C.LUAS_MIN_PIKSEL, C.PROC_W * C.PROC_H * 0.1)
-
     def test_waktu_positif(self):
         for nama in ("TIMEOUT_CARI_S", "TIMEOUT_DEKATI_S", "GRACE_HILANG_S",
                      "JEDA_PERIKSA_S", "MIN_PUTAR_S", "PAUSE_SAMPAI_S"):
@@ -67,43 +64,26 @@ class TesAmbang(unittest.TestCase):
         self.assertAlmostEqual(C.LANGKAH_PER_ARAH * C.SUDUT_LANGKAH, 360)
 
 
-class TesRentangHSV(unittest.TestCase):
-    def test_rentang_penanda_valid(self):
-        for label, daftar in C.WARNA.items():
-            self.assertTrue(daftar, f"{label} tidak punya rentang")
-            for lo, hi in daftar:
-                self.assertLessEqual(0, lo[0]); self.assertLessEqual(hi[0], 179)
-                self.assertLessEqual(lo[0], hi[0], f"hue {label} terbalik")
-                for i, nama in ((1, "S"), (2, "V")):
-                    self.assertLessEqual(0, lo[i])
-                    self.assertLessEqual(lo[i], hi[i], f"{nama} {label} terbalik")
-                    self.assertLessEqual(hi[i], 255)
-
-    def test_warna_gelas_valid(self):
-        for lo, hi in C.WARNA_GELAS:
-            self.assertLessEqual(lo[0], hi[0])
-            self.assertLessEqual(lo[1], hi[1])
-
-    def test_rentang_kopi_dan_teh_tidak_tumpang_tindih(self):
-        def himpunan(daftar):
-            return {h for lo, hi in daftar for h in range(lo[0], hi[0] + 1)}
-        irisan = himpunan(C.WARNA["kopi"]) & himpunan(C.WARNA["teh"])
-        self.assertEqual(irisan, set(), f"hue tumpang tindih: {sorted(irisan)}")
-
-    def test_rentang_bentuk_berurutan_dan_tidak_tumpang(self):
-        kopi = C.BENTUK["kopi"]
-        teh = C.BENTUK["teh"]
-        self.assertLess(kopi[0], kopi[1])
-        self.assertLess(teh[0], teh[1])
-        self.assertLess(kopi[1], teh[0], "rentang mug dan gelas tinggi beririsan")
-
-
-class TesBackend(unittest.TestCase):
+class TesJalurVisi(unittest.TestCase):
     def test_backend_dikenal(self):
-        self.assertIn(C.VISION_BACKEND, {"penanda", "bentuk", "yolo", "fake"})
+        self.assertIn(C.VISION_BACKEND, {"yolo", "yolo-sync", "fake"})
 
-    def test_kelas_yolo_cocok_dengan_label(self):
-        self.assertEqual(set(C.YOLO_KELAS), set(C.WARNA))
+    def test_dua_kelas_sesuai_urutan_training(self):
+        self.assertEqual(C.YOLO_KELAS, ["kopi", "teh"])
+
+    def test_input_model_masuk_akal(self):
+        self.assertIn(C.YOLO_IMGSZ, (320, 416, 640))
+        self.assertLessEqual(C.YOLO_IMGSZ, 640)
+
+    def test_ambang_keyakinan_wajar(self):
+        self.assertGreater(C.CONF_MIN, 0.0)
+        self.assertLess(C.CONF_MIN, 1.0)
+        self.assertGreater(C.YOLO_NMS, 0.0)
+        self.assertLess(C.YOLO_NMS, 1.0)
+
+    def test_async_wajib_untuk_pi_3b(self):
+        self.assertTrue(C.YOLO_ASYNC, "deteksi >1 s/frame tidak boleh menahan loop")
+        self.assertGreater(C.ASYNC_BASI_S, 0)
 
 
 if __name__ == "__main__":

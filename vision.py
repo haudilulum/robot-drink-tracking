@@ -5,8 +5,6 @@ terhadap ukuran frame. ``w`` dipakai sebagai ukuran jarak: makin lebar kotak,
 makin dekat gelasnya.
 
 Backend yang tersedia (pilih di config.VISION_BACKEND atau --vision):
-  penanda : HSV blob pada penanda warna gelas (tutup/stiker/gelas berwarna)
-  bentuk  : siluet gelas, dibedakan dari rasio tinggi/lebar
   yolo    : model 2 kelas ONNX lewat cv2.dnn, dijalankan di thread terpisah
             (tanpa torch; wajib async karena satu frame butuh ~1,2 s di Pi 3B+)
   yolo-sync : sama, tapi deteksi menahan loop — hanya untuk mengukur/menyetel
@@ -92,21 +90,6 @@ def _kecilkan(frame):
             C.PROC_W / lebar, C.PROC_H / tinggi)
 
 
-def _mask(hsv, rentang):
-    hasil = None
-    for lo, hi in rentang:
-        m = cv2.inRange(hsv, np.array(lo, np.uint8), np.array(hi, np.uint8))
-        hasil = m if hasil is None else cv2.bitwise_or(hasil, m)
-    return hasil
-
-
-def _rapikan(mask):
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)     # buang bintik
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)    # tutup lubang
-    return mask
-
-
 class DetektorKamera:
     """Dasar untuk backend yang membaca dari kamera.
 
@@ -128,95 +111,6 @@ class DetektorKamera:
 
     def detect(self, frame):                                # pragma: no cover
         raise NotImplementedError
-
-
-# -------------------------------------------------------------- backend penanda
-class MarkerDetector(DetektorKamera):
-    """Cari blob penanda warna. Label ditentukan oleh rentang HSV-nya."""
-
-    def detect(self, frame):
-        if frame is None:
-            return []
-        kecil, _, _ = _kecilkan(frame)
-        hsv = cv2.cvtColor(kecil, cv2.COLOR_BGR2HSV)
-        hsv = cv2.GaussianBlur(hsv, (5, 5), 0)
-        luas_proc = float(C.PROC_W * C.PROC_H)
-
-        hasil = []
-        for label, rentang in C.WARNA.items():
-            mask = _rapikan(_mask(hsv, rentang))
-            kontur = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                      cv2.CHAIN_APPROX_SIMPLE)[-2]
-            if not kontur:
-                continue
-            terbaik = max(kontur, key=cv2.contourArea)
-            luas = cv2.contourArea(terbaik)
-            if luas < C.LUAS_MIN_PIKSEL:
-                continue
-            x, y, bw, bh = cv2.boundingRect(terbaik)
-            if bw < 8 or bh < 8:
-                continue
-            padat = luas / float(bw * bh)
-            if padat < 0.55:            # bentuk acak (bayangan, pantulan)
-                continue
-            porsi = luas / luas_proc
-            conf = C.clamp(0.35 + 0.65 * porsi / 0.05, 0.0, 1.0) * padat
-            hasil.append(Deteksi(label,
-                                 (x + bw / 2) / C.PROC_W,
-                                 (y + bh / 2) / C.PROC_H,
-                                 bw / C.PROC_W,
-                                 bh / C.PROC_H,
-                                 conf))
-        return hasil
-
-
-# ---------------------------------------------------------------- backend bentuk
-class ShapeDetector(DetektorKamera):
-    """Deteksi siluet gelas terang, lalu klasifikasi dari rasio tinggi/lebar."""
-
-    def detect(self, frame):
-        if frame is None:
-            return []
-        kecil, _, _ = _kecilkan(frame)
-        hsv = cv2.cvtColor(kecil, cv2.COLOR_BGR2HSV)
-        hsv = cv2.GaussianBlur(hsv, (9, 9), 0)
-        mask = _rapikan(_mask(hsv, C.WARNA_GELAS))
-        kontur = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                  cv2.CHAIN_APPROX_SIMPLE)[-2]
-
-        hasil = []
-        for kontur_satu in kontur:
-            luas = cv2.contourArea(kontur_satu)
-            if luas < C.LUAS_MIN_PIKSEL * 4:       # gelas utuh, bukan bintik
-                continue
-            x, y, bw, bh = cv2.boundingRect(kontur_satu)
-            if bw < 10 or bh < 10:
-                continue
-            rasio = bh / float(bw)
-            label, keyakinan = _label_dari_rasio(rasio)
-            if label is None:
-                continue
-            porsi = luas / float(C.PROC_W * C.PROC_H)
-            conf = C.clamp(keyakinan * (0.4 + porsi / 0.08), 0.0, 1.0)
-            hasil.append(Deteksi(label,
-                                 (x + bw / 2) / C.PROC_W,
-                                 (y + bh / 2) / C.PROC_H,
-                                 bw / C.PROC_W,
-                                 bh / C.PROC_H,
-                                 conf))
-        return hasil
-
-
-def _label_dari_rasio(rasio):
-    """Kembalikan (label, keyakinan 0..1) atau (None, 0)."""
-    for label, (lo, hi) in C.BENTUK.items():
-        if lo <= rasio <= hi:
-            tengah = 0.5 * (lo + hi)
-            lebar = max(1e-6, 0.5 * (hi - lo))
-            keyakinan = 1.0 - min(1.0, abs(rasio - tengah) / lebar) * 0.5
-            return label, keyakinan
-    return None, 0.0
-
 
 # ------------------------------------------------------------------ backend yolo
 class YoloDetector(DetektorKamera):
@@ -378,7 +272,7 @@ class AsyncDetector:
                 self._diproses = nomor
                 self._hasil = hasil
                 self._waktu = time.monotonic()
-                self.generasi += 1          # penanda: ada hasil deteksi baru
+                self.generasi += 1          # tanda: ada hasil deteksi baru
             sisa = self.jeda_s - (time.monotonic() - mulai)
             if sisa > 0:
                 self._stop.wait(sisa)
@@ -485,10 +379,16 @@ def make(backend=None, kamera=None):
     backend = backend or os.environ.get("VISION_BACKEND", C.VISION_BACKEND)
     if backend == "fake":
         return FakeDetector()
-    if backend not in ("yolo", "yolo-sync", "bentuk", "penanda"):
+    if backend not in ("yolo", "yolo-sync", "fake"):
         raise ValueError(f"backend visi tidak dikenal: {backend}")
     if not ADA_CV:
         raise RuntimeError("opencv belum terpasang (sudo apt install python3-opencv)")
+    # Periksa model DULU: di instalasi baru yang paling sering kurang adalah model,
+    # bukan kamera. Pesan "kamera tidak bisa dibuka" hanya menyesatkan.
+    if not os.path.exists(C.YOLO_MODEL_PATH):
+        raise RuntimeError(
+            f"model YOLO belum ada: {C.YOLO_MODEL_PATH}\n"
+            "latih dulu di Roboflow/Colab lalu taruh berkas ONNX di models/")
     kamera = kamera if kamera is not None else Kamera()
     if backend == "yolo-sync":
         return YoloDetector(kamera)
@@ -497,9 +397,7 @@ def make(backend=None, kamera=None):
         if not C.YOLO_ASYNC:
             return det
         return AlurDetector(AsyncDetector(det), aktif=C.YOLO_ALUR)
-    if backend == "bentuk":
-        return ShapeDetector(kamera)
-    return MarkerDetector(kamera)
+    raise ValueError(f"backend visi tidak dikenal: {backend!r}")
 
 
 # --------------------------------------------------------------------- debug

@@ -4,8 +4,9 @@ Semua angka yang biasanya perlu disetel ada di file ini, jangan disebar ke file 
 Pin memakai penomoran BCM (bukan nomor fisik header).
 
 Catatan penting soal "membedakan kopi dan teh": isi kopi dan teh sama-sama cairan
-gelap, jadi warna cairan saja TIDAK cukup (lihat README bagian "Cara membedakan").
-Yang dipakai robot adalah penanda pada gelas (tutup/stiker/gelas berwarna).
+gelap, jadi warna cairan saja TIDAK cukup (lihat README "Satu jalur").
+Jalur yang dipakai: model YOLO hasil training (Roboflow/Colab) diekspor ke ONNX.
+Tidak ada ambang warna di proyek ini; tidak ada yang perlu dikalibrasi HSV.
 """
 
 # ---------------------------------------------------------------- Pin (BCM)
@@ -63,43 +64,24 @@ KAMERA_BUFFER = 1           # selalu ambil frame terbaru, jangan antre frame lam
 WARMUP_FRAME = 10           # buang frame awal (kamera masih gelap/AE belum stabil)
 
 # ---------------------------------------------------------------- Visi
-# "penanda" : HSV blob pada penanda warna gelas  -> tanpa dataset, paling ringan
-# "bentuk"  : siluet gelas, dibedakan dari rasio tinggi/lebar (mug vs gelas tinggi)
-# "yolo"    : model 2 kelas hasil latih sendiri, dijalankan lewat cv2.dnn (ONNX)
-# "fake"    : simulasi, untuk menguji state machine tanpa kamera
-VISION_BACKEND = "penanda"
+# Satu jalur identifikasi: model YOLO 2 kelas (kopi, teh) hasil training sendiri,
+# diekspor ke ONNX. Tidak ada ambang warna di proyek ini.
+#   "yolo"      : model di thread terpisah + kotak dirapatkan optical flow
+#   "yolo-sync" : model di loop utama, hanya untuk mengukur latency
+#   "fake"      : pengganti saat --dry-run
+VISION_BACKEND = "yolo"
 
-CONF_MIN = 0.35             # di bawah ini dianggap "tidak yakin"
-LUAS_MIN_PIKSEL = 900       # pada resolusi PROC (320x240): ~1,2% frame
+PROC_W, PROC_H = 320, 240        # frame kecil untuk optical flow & hemat memori
 
-# Rentang HSV untuk penanda (OpenCV: H 0..179, S 0..255, V 0..255).
-# Nilai default: kopi = tutup/stiker coklat-oranye, teh = hijau.
-# Satu label boleh punya beberapa rentang (mis. merah butuh dua sisi H).
-WARNA = {
-    "kopi": [((5, 90, 40), (22, 255, 220))],
-    "teh": [((35, 70, 40), (85, 255, 255))],
-}
-
-# Rentang HSV siluet gelas untuk backend "bentuk" (default: gelas terang/putih).
-WARNA_GELAS = [((0, 0, 110), (179, 80, 255))]
-
-# Rasio tinggi/lebar siluet gelas -> label. Diukur dari bbox, jadi harus
-# dikalibrasi untuk gelas yang benar-benar dipakai (lihat README).
-BENTUK = {
-    "kopi": (0.85, 1.45),   # mug lebar
-    "teh": (1.55, 3.20),    # gelas tinggi
-}
-
-# Backend yolo: path model ONNX 2 kelas dan urutan nama kelasnya.
 YOLO_MODEL_PATH = "models/kopi_teh_yolov8n.onnx"
 YOLO_KELAS = ["kopi", "teh"]     # urutan HARUS sama dengan saat training
 YOLO_IMGSZ = 320                 # 320 cukup; 640 terlalu berat untuk Pi 3B+
 YOLO_NMS = 0.45
+CONF_MIN = 0.35                  # ambang keyakinan deteksi
 YOLO_ASYNC = True               # deteksi di thread terpisah (WAJIB: YOLO ~1,2 s/frame)
 YOLO_ALUR = True                # geser kotak dengan optical flow di antara deteksi
 YOLO_ASYNC_JEDA_S = 0.35        # jarak antar pemeriksaan; 0 = secepat thread mampu
 ASYNC_BASI_S = 1.5              # hasil deteksi lebih tua dari ini dianggap hilang
-
 
 def clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v

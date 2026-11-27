@@ -1,11 +1,11 @@
-"""Tangkap foto dari webcam untuk kalibrasi dan cek kamera.
+"""Tangkap foto dari webcam untuk dataset training dan cek kamera.
 
     python3 tangkap.py --cek              # info kamera (resolusi, fourcc, fps)
     python3 tangkap.py --jumlah 5         # simpan 5 foto ke ./foto
     python3 tangkap.py --video 10         # rekam 10 detik ke foto/uji.avi
 
-Kenapa perlu: HSV tidak bisa ditebak dari mata. Foto asli + kalibrasi.py jauh
-lebih cepat daripada coba-coba angka di config.
+Kenapa perlu: model YOLO hanya belajar dari foto asli yang diambil dengan kamera,
+sudut, dan pencahayaan yang sama seperti saat robot dipakai.
 """
 
 import argparse
