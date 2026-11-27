@@ -9,6 +9,9 @@ mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya dan berbunyi
 - Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS 32-bit, webcam USB,
   2× driver MX1508, 2 motor DC gearbox.
 
+> Status: kode selesai dan teruji (54 tes, uji loop tertutup). Yang belum ada di
+> repo hanya **model terlatih** — dibuat sendiri di tahap 4.
+
 ```
 IDLE ──PB1/PB2──▶ CARI (putar 30°, diam, periksa, ulangi) ──target stabil──▶ DEKATI
 DEKATI ──gelas sudah cukup besar──▶ SAMPAI (stop + beep 1×) ──▶ IDLE
@@ -288,7 +291,9 @@ tapi apakah robot benar-benar berhenti dengan gelas di tengah frame.
 
 ---
 
-## Lampiran: kenapa jarak dari lebar kotak
+## Lampiran
+
+### A. Kenapa jarak dari lebar kotak
 
 Tidak ada sensor jarak di proyek ini. Lebar kotak deteksi cukup karena geometri
 kamera biasa:
@@ -313,13 +318,13 @@ Ketelitiannya: galat jarak ≈ galat lebar. Kotak bergetar 10% berarti jarak mel
 Batasnya: cara ini mengasumsikan ukuran gelas tetap. Kalau di demo dipakai gelas
 dengan ukuran berbeda jauh, setel `W_BERHENTI` untuk yang paling kecil.
 
-## Lampiran: kenapa YOLO, bukan ambang warna
+### B. Kenapa model terlatih, bukan ambang warna manual
 
-Ambang HSV bekerja kalau gelas diberi penanda warna tunggal, tapi rentangnya harus
-disetel ulang setiap kali lampu atau meja berubah, dan satu rentang untuk `kopi`
-gampang tumpang tindih dengan `teh`. Model belajar bentuk, tekstur, dan konteks
-sekaligus. Ongkosnya: dataset berlabel dan satu kali training — itu sudah
-dikerjakan di tahap 4.
+Membedakan dua benda yang pikselnya hampir sama tidak bisa dilakukan dengan batas
+warna: batas itu harus disetel ulang setiap kali lampu atau meja berubah, dan satu
+rentang untuk `kopi` gampang tumpang tindih dengan `teh`. Model belajar bentuk,
+tekstur, dan konteks sekaligus. Ongkosnya dataset berlabel dan satu kali training —
+itu sudah dikerjakan di tahap 4.
 
 Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (terukur
 1171 ms), sementara 320 diperkirakan ±1 s. Karena itu:
@@ -331,7 +336,7 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
 - karena gelas diam, deteksi yang putus sesaat bukan alasan berhenti: perintah
   terakhir dilanjutkan sampai `GRACE_HILANG_S` lewat.
 
-## Lampiran: berkas
+### C. Berkas
 
 | Berkas | Isi |
 |---|---|
@@ -342,7 +347,7 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
 | `scripts/install_pi.sh` | dependensi + unit systemd |
 | `tests/` | 54 unit test + uji integrasi dunia |
 
-## Kalau bermasalah
+### D. Kalau bermasalah
 
 - **`model YOLO belum ada`** — ONNX belum ditaruh di `models/kopi_teh_yolov8n.onnx`.
 - **Kelas tertukar (kopi dianggap teh)** — `YOLO_KELAS` tidak sama urutan dengan
@@ -362,7 +367,7 @@ Di Pi 3B+, YOLOv8n ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teruku
 - **Kamera 5 FPS / gelap** — `KAMERA_MJPG=True` belum berlaku; cek dengan perintah
   di tahap 3.
 
-## Yang belum ada
+### E. Yang belum ada
 
 - **Model terlatih di repo ini** — `models/` kosong; dataset dan training
   dikerjakan terpisah (tahap 4).
