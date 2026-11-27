@@ -80,15 +80,6 @@ def pilih_target(daftar, target):
     return max(kandidat, key=lambda d: d.w) if kandidat else None
 
 
-def _kecilkan(frame):
-    """Perkecil ke resolusi pemrosesan. Kembalikan (frame_kecil, faktor_w, faktor_h)."""
-    tinggi, lebar = frame.shape[:2]
-    if (lebar, tinggi) == (C.PROC_W, C.PROC_H):
-        return frame, 1.0, 1.0
-    return (cv2.resize(frame, (C.PROC_W, C.PROC_H), interpolation=cv2.INTER_AREA),
-            C.PROC_W / lebar, C.PROC_H / tinggi)
-
-
 class DetektorKamera:
     """Dasar untuk backend yang membaca dari kamera.
 

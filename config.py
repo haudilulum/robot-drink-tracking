@@ -83,9 +83,6 @@ WARMUP_FRAME = 10           # buang frame awal (kamera masih gelap/AE belum stab
 #   "fake" : pengganti saat --dry-run (tanpa kamera, tanpa model)
 VISION_BACKEND = "yolo"
 
-PROC_W, PROC_H = 320, 240        # frame kecil untuk optical flow & hemat memori
-                                 # (kamera tetap 640x480; hanya flow memakai 320x240)
-
 # Nama berkas bebas selama sama dengan isi models/. Yang wajib cocok adalah
 # YOLO_IMGSZ dengan ukuran input saat ekspor dan YOLO_KELAS dengan urutan kelas.
 # Arsitektur yang aman: YOLO11 nano/small (keluaran sama seperti YOLOv8).

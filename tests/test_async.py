@@ -78,7 +78,6 @@ class TesAsync(unittest.TestCase):
 
     def test_yolo_memakai_async(self):
         import inspect
-        import config as C
         kode = inspect.getsource(vision.make)
         self.assertIn("AsyncDetector", kode)
         self.assertNotIn("YOLO_ASYNC", kode, "tidak ada jalan sinkron: YOLO selalu async")

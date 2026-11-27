@@ -14,7 +14,6 @@ singkat tidak hilang walau loop sedang sibuk memproses frame.
 
 from collections import deque
 import os
-import time
 
 import config as C
 
