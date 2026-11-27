@@ -6,8 +6,8 @@ mencari gelas yang diminta, mendekatinya, lalu berhenti di depannya.
 - **PB1 → kopi**, **PB2 → teh**.
 - Kopi dan teh dibedakan oleh **model YOLO hasil latih sendiri** (Roboflow → ONNX),
   bukan ambang warna.
-- Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS 32-bit, webcam USB,
-  2× driver MX1508, 2 motor DC gearbox.
+- Target perangkat: **Raspberry Pi 3B+ (1 GB)**, Raspberry Pi OS **Trixie Lite 32-bit**,
+  webcam USB, 2× driver MX1508, 4 motor DC gearbox (4WD).
 
 > Status: kode selesai dan teruji (56 tes, uji loop tertutup). Yang belum ada di
 > repo hanya **model terlatih** — dibuat sendiri di tahap 4.
@@ -43,7 +43,7 @@ setelah robotnya bisa melihat (tahap 3).
 | Bagian | Jumlah | Catatan |
 |---|---|---|
 | Raspberry Pi 3B+ | 1 | 1 GB RAM; 4/5 boleh, tapi angka di repo ini diukur untuk 3B+ |
-| microSD 16 GB+ | 1 | Raspberry Pi OS **32-bit** (Bullseye/Bookworm) |
+| microSD 16 GB+ | 1 | Raspberry Pi OS **Trixie Lite 32-bit** (Debian 13) |
 | Webcam USB (UVC) | 1 | yang mendukung **MJPG** 640×480 @30 FPS |
 | Modul driver MX1508 | 2 | 4 kanal terpakai, **satu motor satu kanal**; jangan diparalel (batas ±1,2–1,5 A/kanal) |
 | Motor DC gearbox + roda | 4 set | motor "TT" kuning sudah cukup; 4 roda digerakkan semua |
@@ -165,14 +165,41 @@ tukar kabel di driver secara asal, karena urutan pin juga dipakai saat memutar
 badan. Uji belok terakhir memastikan kedua sisi melawan arah dengan benar; kalau
 robot justru maju lurus, salah satu sisi masih terbalik.
 
-## 3. Pasang Raspberry Pi dan pastikan kamera terlihat
+## 3. Pasang Raspberry Pi OS Trixie dan pastikan kamera terlihat
+
+Repo ini diuji untuk **Raspberry Pi OS Trixie Lite 32-bit** (Debian 13, Python 3.13,
+OpenCV 4.10 dari apt). Pakai **Lite**, bukan Desktop: Desktop memakai ±250 MB RAM
+tambahan, dan Pi 3B+ hanya punya 1 GB. Image **64-bit** juga jalan dengan kode yang
+sama, tapi sisa RAM untuk kamera + model lebih ketat.
 
 ```bash
+grep VERSION_CODENAME /etc/os-release          # harus: VERSION_CODENAME=trixie
+
 sudo apt update
-sudo apt install -y python3-opencv python3-numpy python3-gpiozero python3-lgpio git
+sudo apt install -y python3-opencv python3-numpy python3-gpiozero git
+sudo apt install -y python3-lgpio || echo "python3-lgpio tidak ada; lewati"
+#  ^ lgpio ada di repo Raspberry Pi, tidak di Debian. gpiozero tetap jalan
+#    dengan backend lain kalau paket ini tidak tersedia.
+
 git clone https://github.com/haudilulum/robot-drink-tracking
 cd robot-drink-tracking
+
+python3 - <<'PY'
+import gpiozero, cv2, sys
+print("python  :", sys.version.split()[0])
+print("opencv  :", cv2.__version__, "| dnn:", hasattr(cv2, "dnn"))
+print("gpiozero:", gpiozero.__version__, "| backend:", gpiozero.Device.pin_factory)
+PY
 ```
+
+Yang harus terlihat: `python 3.13.x`, `opencv 4.10.x | dnn: True`, dan
+`gpiozero ... backend:` berisi sesuatu seperti `LGPIOPinFactory` (bukan `None`).
+Kalau `dnn: False`, OpenCV yang terpasang tidak lengkap — pasang ulang
+`python3-opencv` dari apt.
+
+Di Trixie, Python bersifat *externally managed* (PEP 668): **jangan**
+`pip install opencv-python`. Perintah itu ditolak, dan kalau dipaksa akan
+mengompilasi OpenCV berjam-jam karena wheel 32-bit tidak tersedia.
 
 Cek kamera (resolusi, FPS, dan frame benar-benar terbaca):
 
@@ -398,7 +425,7 @@ Di Pi 3B+, YOLO nano ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teru
 | `hardware.py` | motor/tombol + versi palsu untuk tes |
 | `vision.py` | kamera, `YoloDetector`, `AsyncDetector`, `AlurDetector`, `FakeDetector` |
 | `main.py` | state machine + CLI |
-| `scripts/install_pi.sh` | dependensi + unit systemd |
+| `scripts/install_pi.sh` | dependensi (Trixie) + cek pustaka/kamera + unit systemd |
 | `tests/` | 56 unit test + uji integrasi dunia |
 
 ### D. Kalau bermasalah
@@ -414,6 +441,11 @@ Di Pi 3B+, YOLO nano ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teru
   terlalu menunduk atau robot sudah terlalu dekat.
 - **Robot berhenti-maju berulang** — deteksi sering putus; naikkan
   `GRACE_HILANG_S` atau turunkan `CONF_MIN`.
+- **`gpiozero` bilang `no pin factory found`** — `ls /dev/gpiochip*` harus ada;
+  kalau tidak, paket `python3-lgpio` belum terpasang atau board butuh reboot.
+  Jalankan juga sebagai user biasa (anggota grup `gpio`), bukan hanya root.
+- **`pip install` menolak dengan `externally-managed-environment`** — memang
+  disengaja di Trixie; pakai `apt install python3-...` saja.
 - **Robot tidak bergerak walau duty 0,4** — deadband motor atau baterai drop; ukur
   tegangan VM saat motor jalan.
 - **Robot menarik ke satu sisi walau lurus** — diameter roda tidak sama atau satu
