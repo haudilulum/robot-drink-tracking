@@ -36,8 +36,26 @@ tidak jadi soal. Yang jadi soal adalah **inference**: YOLOv8n ONNX 640×640 di
 `cv2.dnn` pada CPU kelas Cortex-A53 terukur **1171 ms/frame (0,85 FPS)**,
 sementara HSV blob 320×240 hanya **4,9 ms (≈200 FPS)**.
 
-Karena itu backend `yolo` sekarang otomatis membungkus model dalam
-`vision.AsyncDetector`: model berjalan di thread sendiri, loop kendali tetap
+Angka Pi 3B+ yang sudah terukur di proyek `human-tracking-robot-v2`
+(tercatat di `config.yaml` sana): **640 → 4,1 s, 416 → 1,75 s, 320 → 1,03 s**
+per deteksi, dan TFLite int8 1,8× lebih cepat daripada ONNX fp32.
+
+Karena itu backend `yolo` otomatis memakai dua lapis:
+
+- `vision.AsyncDetector` — model berjalan di thread sendiri, loop kendali tidak
+  pernah menunggu (terukur di board uji: loop tetap ~16 Hz saat model butuh
+  1,17 s/frame).
+- `vision.AlurDetector` — kotak digeser dengan optical flow Lucas-Kanade
+  (~5 ms/frame) di setiap frame kamera, jadi kotak tetap menempel di gelas di
+  antara dua deteksi. Bila titik fitur habis (gelas tertutup/buram), kotak
+  dilepas dan state machine memperlakukannya sebagai target hilang.
+
+Pola ini sama dengan yang terbukti jalan di `human-tracking-robot-v2`; bedanya,
+target di sini (gelas) jauh lebih kecil daripada orang, jadi fase mencari tetap
+lebih rawan terlewat — putar badan lebih lambat saat memakai backend `yolo`.
+Flag: `YOLO_ASYNC`, `YOLO_ALUR`, `YOLO_ASYNC_JEDA_S`, `ASYNC_BASI_S`.
+
+Penjelasan lain: model berjalan di thread sendiri, loop kendali tetap
 mengambil hasil terakhir tanpa menunggu (terukur: loop tetap ~16–20 Hz saat model
 butuh 1,2 s per frame). Hasil yang lebih tua dari `ASYNC_BASI_S` dibuang agar
 robot tidak mengejar posisi gelas lama. Backend `yolo-sync` (menahan loop) hanya
@@ -128,7 +146,7 @@ osilasi kiri-kanan) dan `SPEED_MAJU`.
 ```bash
 python3 main.py --dry-run --seconds 10                 # PB1 otomatis
 python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                  # 59 tes
+python3 -m unittest discover -s tests                  # 63 tes
 python3 tests/uji_integrasi_dunia.py                   # kamera sintetis closed-loop
 ```
 
@@ -146,7 +164,7 @@ berhenti dengan gelas di tengah — bukan cuma apakah detektor menyala.
 | `main.py` | state machine + CLI |
 | `kalibrasi.py` | saran rentang HSV dari foto (tanpa GUI) |
 | `tangkap.py` | ambil foto, rekam video, ukur FPS & kecerahan |
-| `tests/` | 59 unit test + uji integrasi |
+| `tests/` | 63 unit test + uji integrasi |
 
 ## Troubleshooting
 

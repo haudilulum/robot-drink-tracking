@@ -382,6 +382,98 @@ class AsyncDetector:
                 self._stop.wait(sisa)
 
 
+class AlurDetector:
+    """Geser kotak deteksi antar-inferensi dengan optical flow (Lucas-Kanade).
+
+    YOLO 416 di Pi 3B+ butuh ~1,75 s per deteksi (angka terukur di proyek
+    human-tracking-robot-v2), jadi kotak yang dibiarkan diam akan tertinggal jauh
+    dari gelas begitu robot berbelok. Optical flow hanya ~5 ms/frame, sehingga
+    kotak tetap menempel di gelas pada setiap frame kamera; YOLO dipakai untuk
+    mengunci ulang posisi + label, bukan untuk setiap frame.
+
+    Bila titik fitur habis (gelas tertutup, frame buram), kotak dilepas dan
+    detektor mengembalikan daftar kosong — state machine akan menanganinya
+    sebagai target hilang, bukan mengejar posisi palsu.
+    """
+
+    def __init__(self, dalam, aktif=True, titik_maks=40):
+        self.dalam = dalam
+        self.aktif = bool(aktif) and ADA_CV
+        self.titik_maks = titik_maks
+        self._abu = None
+        self._titik = None
+        self._kotak = None
+        self._masuk = None
+
+    def read(self):
+        return self.dalam.read()
+
+    def close(self):
+        self.dalam.close()
+
+    def detect(self, frame):
+        masuk = self.dalam.detect(frame)
+        if not self.aktif or frame is None:
+            return masuk
+        if not ADA_CV:
+            return masuk
+        abu = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if masuk and masuk != self._masuk:                 # deteksi baru: kunci ulang
+            self._masuk = masuk
+            self._kotak = masuk[0]
+            self._titik = self._benih(abu, self._kotak)
+            self._abu = abu
+            return masuk
+        self._masuk = masuk
+        if self._kotak is None or self._abu is None or self._titik is None:
+            self._abu = abu
+            return masuk
+        baru, status, _ = cv2.calcOpticalFlowPyrLK(
+            self._abu, abu, self._titik, None, winSize=(15, 15), maxLevel=2)
+        self._abu = abu
+        if baru is None or status is None:
+            self._lepas()
+            return []
+        baik = status.reshape(-1) == 1
+        if int(baik.sum()) < 4:
+            self._lepas()
+            return []
+        geser = (baru[baik] - self._titik[baik]).reshape(-1, 2)
+        dx, dy = float(np.median(geser[:, 0])), float(np.median(geser[:, 1]))
+        tinggi, lebar = abu.shape[:2]
+        k = self._kotak
+        self._kotak = Deteksi(k.label,
+                              C.clamp(k.cx + dx / lebar, 0, 1),
+                              C.clamp(k.cy + dy / tinggi, 0, 1),
+                              k.w, k.h, k.conf)
+        self._titik = baru[baik].reshape(-1, 1, 2).astype("float32")
+        if len(self._titik) < 8:                           # fitur menipis: isi ulang
+            tambahan = self._benih(abu, self._kotak)
+            if tambahan is not None:
+                self._titik = tambahan
+        return [self._kotak]
+
+    def _lepas(self):
+        self._kotak = None
+        self._titik = None
+
+    def _benih(self, abu, d):
+        tinggi, lebar = abu.shape[:2]
+        x0 = int(max(0, (d.cx - d.w / 2) * lebar))
+        x1 = int(min(lebar - 1, (d.cx + d.w / 2) * lebar))
+        y0 = int(max(0, (d.cy - d.h / 2) * tinggi))
+        y1 = int(min(tinggi - 1, (d.cy + d.h / 2) * tinggi))
+        if x1 - x0 < 10 or y1 - y0 < 10:
+            return None
+        roi = abu[y0:y1, x0:x1]
+        titik = cv2.goodFeaturesToTrack(roi, maxCorners=self.titik_maks,
+                                        qualityLevel=0.01, minDistance=4)
+        if titik is None:
+            return None
+        titik = titik.reshape(-1, 2) + np.array([x0, y0], dtype="float32")
+        return titik.reshape(-1, 1, 2).astype("float32")
+
+
 # -------------------------------------------------------------------- pabrik
 def make(backend=None, kamera=None):
     backend = backend or os.environ.get("VISION_BACKEND", C.VISION_BACKEND)
@@ -396,7 +488,9 @@ def make(backend=None, kamera=None):
         return YoloDetector(kamera)
     if backend == "yolo":
         det = YoloDetector(kamera)
-        return AsyncDetector(det) if C.YOLO_ASYNC else det
+        if not C.YOLO_ASYNC:
+            return det
+        return AlurDetector(AsyncDetector(det), aktif=C.YOLO_ALUR)
     if backend == "bentuk":
         return ShapeDetector(kamera)
     return MarkerDetector(kamera)
