@@ -1,4 +1,11 @@
-# hanya untuk mesin dev; di Raspberry Pi pakai apt (python3-opencv,
-# python3-numpy, python3-gpiozero, python3-lgpio) supaya wheel tidak dikompilasi
-opencv-python-headless>=4.5
+# hanya untuk mesin dev (laptop). Di Raspberry Pi, OpenCV dipasang di venv
+# lewat piwheels karena wheel armv7l untuk opset baru hanya ada di versi 5.x:
+#
+#   python3 -m venv --system-site-packages .venv
+#   .venv/bin/pip install --index-url https://www.piwheels.org/simple \
+#       --extra-index-url https://pypi.org/simple "opencv-python-headless>=5.0"
+#
+# OpenCV 4.10 dari apt memuat ONNX opset 20 tanpa error tapi hasil forward-nya
+# salah (deteksi kosong), jadi jangan pakai python3-opencv dari apt.
+opencv-python-headless>=5.0
 numpy>=1.19

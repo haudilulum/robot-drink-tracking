@@ -139,10 +139,10 @@ tepat saat robot mendekat.
 Pasang roda, lalu jalankan uji roda sebelum memasang kamera:
 
 ```bash
-python3 main.py --dry-run --seconds 3      # hanya mencatat, tidak menggerakkan motor
+.venv/bin/python main.py --dry-run --seconds 3      # hanya mencatat, tidak menggerakkan motor
 
 # tiap roda sendiri-sendiri, 1,5 s
-python3 - <<'PY'
+.venv/bin/python - <<'PY'
 import hardware, time
 hw = hardware.make()
 for nama in ("kiri_depan", "kiri_belakang", "kanan_depan", "kanan_belakang"):
@@ -155,7 +155,7 @@ hw.stop()
 PY
 
 # berbelok di tempat: kiri maju, kanan mundur
-python3 -c "import hardware,time;hw=hardware.make();hw.drive(0.45,-0.45);time.sleep(1.5);hw.stop()"
+.venv/bin/python -c "import hardware,time;hw=hardware.make();hw.drive(0.45,-0.45);time.sleep(1.5);hw.stop()"
 ```
 
 Periksa satu per satu: keempat roda harus berputar **maju** (menuju depan bodi).
@@ -184,7 +184,7 @@ Itu mematikan desktop (±250 MB) dan tetap menyisakan SSH.
 grep VERSION_CODENAME /etc/os-release          # harus: VERSION_CODENAME=trixie
 
 sudo apt update
-sudo apt install -y python3-opencv python3-numpy python3-gpiozero git
+sudo apt install -y python3-venv python3-numpy python3-gpiozero git
 sudo apt install -y python3-lgpio || echo "python3-lgpio tidak ada; lewati"
 #  ^ lgpio ada di repo Raspberry Pi, tidak di Debian. gpiozero tetap jalan
 #    dengan backend lain kalau paket ini tidak tersedia.
@@ -192,7 +192,13 @@ sudo apt install -y python3-lgpio || echo "python3-lgpio tidak ada; lewati"
 git clone https://github.com/haudilulum/robot-drink-tracking
 cd robot-drink-tracking
 
-python3 - <<'PY'
+# OpenCV TIDAK dari apt: versi apt (4.10 di Trixie) memuat ONNX opset baru
+# tanpa error tapi hasil forward-nya salah -> deteksi selalu kosong.
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install --index-url https://www.piwheels.org/simple \
+    --extra-index-url https://pypi.org/simple "opencv-python-headless>=5.0"
+
+.venv/bin/python - <<'PY'
 import gpiozero, cv2, sys
 print("python  :", sys.version.split()[0])
 print("opencv  :", cv2.__version__, "| dnn:", hasattr(cv2, "dnn"))
@@ -200,19 +206,26 @@ print("gpiozero:", gpiozero.__version__, "| backend:", gpiozero.Device.pin_facto
 PY
 ```
 
-Yang harus terlihat: `python 3.13.x`, `opencv 4.10.x | dnn: True`, dan
+Yang harus terlihat: `python 3.13.x`, `opencv 5.x | dnn: True`, dan
 `gpiozero ... backend:` berisi sesuatu seperti `LGPIOPinFactory` (bukan `None`).
-Kalau `dnn: False`, OpenCV yang terpasang tidak lengkap — pasang ulang
-`python3-opencv` dari apt.
+Kalau `dnn: False`, wheel OpenCV gagal terpasang — ulangi perintah `pip` di atas.
 
-Di Trixie, Python bersifat *externally managed* (PEP 668): **jangan**
-`pip install opencv-python`. Perintah itu ditolak, dan kalau dipaksa akan
-mengompilasi OpenCV berjam-jam karena wheel 32-bit tidak tersedia.
+**Kenapa bukan `apt install python3-opencv`.** Stack yang sama sudah dipakai
+proyek human tracking di board dan OS ini, dan pelajarannya jelas: OpenCV 4.10
+dari apt *berhasil memuat* model ONNX hasil ekspor Ultralytics (opset 20) tanpa
+satu pun pesan error, tetapi hasil forward-nya salah sehingga deteksi tampak
+kosong — persis seperti model rusak. Wheel `opencv-python-headless` 5.x untuk
+armv7l disediakan piwheels, jadi pasang di venv seperti di atas dan jalankan
+semua perintah dengan `.venv/bin/python`.
+
+Seluruh perintah Python di README ini memakai `.venv/bin/python`; installer
+(`scripts/install_pi.sh`) membuat venv itu dan menuliskan path-nya ke unit
+systemd, jadi `systemctl start` juga memakai OpenCV yang benar.
 
 Cek kamera (resolusi, FPS, dan frame benar-benar terbaca):
 
 ```bash
-python3 -c "import cv2;c=cv2.VideoCapture(0);c.set(cv2.CAP_PROP_FOURCC,cv2.VideoWriter_fourcc(*'MJPG'));ok,f=c.read();print('kamera',int(c.get(3)),'x',int(c.get(4)),'@',round(c.get(5)),'fps','frame=ada' if ok else 'frame=GAGAL')"
+.venv/bin/python -c "import cv2;c=cv2.VideoCapture(0);c.set(cv2.CAP_PROP_FOURCC,cv2.VideoWriter_fourcc(*'MJPG'));ok,f=c.read();print('kamera',int(c.get(3)),'x',int(c.get(4)),'@',round(c.get(5)),'fps','frame=ada' if ok else 'frame=GAGAL')"
 ```
 
 Yang harus terlihat: `640 x 480 @ 30 fps frame=ada`. Kalau `frame=GAGAL`, cek
@@ -223,7 +236,7 @@ terlihat "berpikir lama".
 Cek kedua tombol tanpa menggerakkan motor:
 
 ```bash
-python3 -c "import hardware;hw=hardware.make();print('tekan tombol (Ctrl-C keluar)');[print('  ->',hw.read_button()) or __import__('time').sleep(0.1) for _ in iter(int,1)]"
+.venv/bin/python -c "import hardware;hw=hardware.make();print('tekan tombol (Ctrl-C keluar)');[print('  ->',hw.read_button()) or __import__('time').sleep(0.1) for _ in iter(int,1)]"
 ```
 
 Setiap tekanan PB1 harus mencetak `kopi`, PB2 mencetak `teh`.
@@ -308,7 +321,7 @@ model harus seukuran. Konsekuensinya satu deteksi naik dari ±1 s ke ±4 s.
 ## 5. Uji deteksi sebelum menyentuh motor
 
 ```bash
-python3 main.py --vision yolo --debug foto/debug --diam
+.venv/bin/python main.py --vision yolo --debug foto/debug --diam
 ```
 
 Biarkan 10–20 detik, tekan Ctrl-C, lalu buka `foto/debug/`:
@@ -330,7 +343,7 @@ Motor TT + 2S biasanya 0,30–0,40.
 
 **b. `W_BERHENTI` (0,48) dan `W_MULAI_PELAN` (0,30)** — jarak berhenti.
 Letakkan gelas pada jarak yang Anda inginkan (mis. 35 cm dari kamera), jalankan
-`python3 main.py --debug foto/debug`, baca `w=` saat kotak menempel di gelas, lalu
+`.venv/bin/python main.py --debug foto/debug`, baca `w=` saat kotak menempel di gelas, lalu
 set `W_BERHENTI` ke angka itu dan `W_MULAI_PELAN` = `W_BERHENTI` − 0,18.
 
 **c. `DERAJAT_PER_DETIK` (90)** — kecepatan putar sebenarnya. Jalankan mode cari,
@@ -360,7 +373,7 @@ manual, supaya GPIO tidak dipakai dua proses sekaligus:
 
 ```bash
 sudo systemctl stop robot-drink-tracking
-python3 main.py                     # mode debug di terminal
+.venv/bin/python main.py                     # mode debug di terminal
 ```
 
 ## 8. Uji tanpa hardware (untuk mengubah kode)
@@ -368,10 +381,10 @@ python3 main.py                     # mode debug di terminal
 Semua logika bisa diuji tanpa Pi, kamera, atau model — cukup Python + OpenCV:
 
 ```bash
-python3 main.py --dry-run --seconds 10                  # PB1 otomatis, detektor palsu
-python3 main.py --dry-run --seconds 10 --tombol-uji teh
-python3 -m unittest discover -s tests                   # 56 tes
-python3 tests/uji_integrasi_dunia.py                    # loop tertutup dunia sintetis
+.venv/bin/python main.py --dry-run --seconds 10                  # PB1 otomatis, detektor palsu
+.venv/bin/python main.py --dry-run --seconds 10 --tombol-uji teh
+.venv/bin/python -m unittest discover -s tests                   # 56 tes
+.venv/bin/python tests/uji_integrasi_dunia.py                    # loop tertutup dunia sintetis
 ```
 
 `uji_integrasi_dunia.py` menggeser gelas ke tengah saat robot berbelok dan
@@ -438,6 +451,9 @@ Di Pi 3B+, YOLO nano ONNX 640×640 lewat `cv2.dnn` butuh **±1,2 s/frame** (teru
 
 ### D. Kalau bermasalah
 
+- **Deteksi selalu kosong padahal model ada** — cek `.venv/bin/python -c "import cv2;print(cv2.__version__)"`.
+  Kalau yang muncul 4.x, itu OpenCV dari apt: model termuat tanpa error tapi
+  hasil forward-nya salah. Pasang ulang `opencv-python-headless>=5.0` di venv.
 - **`model YOLO belum ada`** — ONNX belum ditaruh di `models/kopi_teh.onnx`.
 - **Kelas tertukar (kopi dianggap teh)** — `YOLO_KELAS` tidak sama urutan dengan
   `data.yaml` Roboflow.
