@@ -34,7 +34,8 @@ Ambang warna (HSV blob) bekerja kalau gelasnya diberi penanda warna tunggal, tap
 rentangnya harus disetel ulang setiap kali lampu/meja berubah, dan satu rentang
 untuk `kopi` gampang tumpang tindih dengan `teh`. Model belajar bentuk, tekstur,
 dan konteks gelas sekaligus, sehingga lebih tahan perubahan cahaya. Harganya:
-perlu ±300 foto berlabel dan satu kali training.
+perlu ±300 foto berlabel dan satu kali training — cukup ±60 foto **bervariasi** per kelas, bukan 300 foto yang
+mirip semua.
 
 ### Biaya inference dan cara menutupinya
 
@@ -59,9 +60,12 @@ melanjutkannya sampai `GRACE_HILANG_S` lewat.
 
 ## Membuat model (Roboflow)
 
-1. `python3 tangkap.py --jumlah 300` — foto dari **kamera, sudut, dan ketinggian
-   pemasangan yang sama** dengan saat dipakai; sertakan variasi terang/gelap,
-   jarak, dan sudut pandang.
+1. Ambil foto dari **kamera, sudut, dan ketinggian pemasangan yang sama** dengan
+   saat dipakai. Jumlah bukan target: 120 foto yang bervariasi mengalahkan 300
+   foto hasil burst yang nyaris identik. Yang dihitung adalah variasi —
+   terang/gelap, jarak 20/40/60/100 cm, gelas di kiri/tengah/kanan frame, dua
+   jenis meja, ada/tidak ada gelas lain di latar. `python3 tangkap.py --jumlah 120`
+   di Pi, atau webcam USB yang dicolok ke laptop.
 2. Upload ke Roboflow, beri label `kopi` / `teh` (satu kotak per gelas; gelas lain
    yang bukan target jangan dilabeli).
 3. Augmentasi cahaya + blur secukupnya, lalu train (Roboflow hosted atau Colab).
